@@ -12,13 +12,13 @@ Folder layout expected:
     .streamlit/config.toml   (theme — cream / white / blue)
     data/reports.csv         (created automatically on first report)
 
-BEFORE DEPLOYING — replace these two placeholders below:
-    NAWASA_WHATSAPP_NUMBER  -> real WhatsApp number in international format, no + or spaces
-    STAFF_PASSCODE          -> a real passcode for staff to view reports (or set via env var)
+BEFORE DEPLOYING — set a real staff passcode:
+    STAFF_PASSCODE  -> replace "changeme123" below, or set as an env var / Streamlit secret
 """
 
 import os
 import csv
+import base64
 from datetime import datetime
 
 import streamlit as st
@@ -26,12 +26,14 @@ from google import genai
 from google.genai import types
 
 # ---------------------------------------------------------------------------
-# ⚠️ REPLACE THESE BEFORE GOING LIVE
+# NAWASA contact details
 # ---------------------------------------------------------------------------
-NAWASA_WHATSAPP_NUMBER = "18095551234"  # <-- put the real NAWASA WhatsApp number here (no + or spaces)
+NAWASA_WHATSAPP_LINK = "https://wa.link/rt9dj1"  # NAWASA WhatsApp (routes to 405-5245 / 459-6064 / 405-9143)
+NAWASA_PHONE = "(473) 440-2155"
+NAWASA_WEBSITE = "https://nawasa.gd/"
 STAFF_PASSCODE = os.environ.get("STAFF_PASSCODE", "changeme123")  # <-- set a real passcode / env var
 
-WHATSAPP_LINK = f"https://wa.me/{NAWASA_WHATSAPP_NUMBER}?text=Hello%20NAWASA%2C%20I%20need%20help%20with%20my%20water%20service."
+WHATSAPP_LINK = NAWASA_WHATSAPP_LINK
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -47,93 +49,170 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
-# Brand palette (cream / white / blue) — mirrors .streamlit/config.toml
+# Brand palette (cream / white / blue)
 # ---------------------------------------------------------------------------
 BRAND_BLUE = "#0B76C7"
+BRAND_BLUE_LIGHT = "#4FA8E0"
 BRAND_BLUE_DARK = "#0B2545"
 BRAND_CREAM = "#FDF9F0"
 BRAND_CREAM_SOFT = "#F5EEDC"
 BRAND_WHITE = "#FFFFFF"
 WHATSAPP_GREEN = "#25D366"
 
+logo_b64 = ""
+if os.path.exists(LOGO_PATH):
+    with open(LOGO_PATH, "rb") as f:
+        logo_b64 = base64.b64encode(f.read()).decode()
+
 # ---------------------------------------------------------------------------
-# Custom CSS — droplet accents + chat bubble styling
+# Custom CSS
 # ---------------------------------------------------------------------------
 st.markdown(
     f"""
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
+    html, body, [class*="css"] {{
+        font-family: 'Poppins', sans-serif;
+    }}
     .stApp {{
         background-color: {BRAND_CREAM};
     }}
-    .aqua-header {{
+    .block-container {{
+        padding-top: 1rem;
+        max-width: 780px;
+    }}
+
+    /* Hero banner with wave */
+    .aqua-hero {{
+        position: relative;
+        background: linear-gradient(135deg, {BRAND_BLUE} 0%, {BRAND_BLUE_LIGHT} 100%);
+        border-radius: 24px 24px 0 0;
+        padding: 1.8rem 1.6rem 3.2rem 1.6rem;
+        margin-bottom: -1px;
+        overflow: hidden;
+    }}
+    .aqua-hero-content {{
         display: flex;
         align-items: center;
-        gap: 0.9rem;
-        padding: 1rem 1.25rem;
-        background: linear-gradient(135deg, {BRAND_WHITE} 0%, {BRAND_CREAM_SOFT} 100%);
-        border: 1px solid #E0E6EE;
-        border-radius: 18px;
-        margin-bottom: 1.25rem;
-        box-shadow: 0 2px 10px rgba(11, 118, 199, 0.08);
+        gap: 1rem;
+        position: relative;
+        z-index: 2;
     }}
-    .aqua-header img {{
-        width: 56px;
-        height: 56px;
+    .aqua-hero img {{
+        width: 64px;
+        height: 64px;
         border-radius: 50%;
         background: {BRAND_WHITE};
-        padding: 4px;
-        box-shadow: 0 0 0 3px {BRAND_BLUE}20;
+        padding: 5px;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.18);
     }}
-    .aqua-title {{
-        font-size: 1.6rem;
+    .aqua-hero-title {{
+        font-size: 1.7rem;
         font-weight: 800;
-        color: {BRAND_BLUE_DARK};
-        line-height: 1.1;
+        color: {BRAND_WHITE};
+        line-height: 1.15;
+        letter-spacing: -0.02em;
     }}
-    .aqua-subtitle {{
-        font-size: 0.9rem;
-        color: {BRAND_BLUE};
+    .aqua-hero-subtitle {{
+        font-size: 0.95rem;
+        color: rgba(255,255,255,0.9);
         font-weight: 500;
     }}
-    .droplet-divider {{
+    .aqua-wave {{
+        position: absolute;
+        bottom: -2px;
+        left: 0;
+        width: 100%;
+        line-height: 0;
+        z-index: 1;
+    }}
+    .aqua-wave-fill {{
+        fill: {BRAND_CREAM};
+    }}
+
+    /* Card container */
+    .aqua-card {{
+        background: {BRAND_WHITE};
+        border-radius: 18px;
+        padding: 1.1rem 1.3rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 12px rgba(11, 118, 199, 0.08);
+        border: 1px solid #ECEFF3;
+    }}
+
+    /* Section label */
+    .aqua-section-label {{
         display: flex;
         align-items: center;
-        justify-content: center;
-        gap: 0.5rem;
-        margin: 0.75rem 0 1.25rem 0;
+        gap: 0.4rem;
+        font-size: 0.8rem;
+        font-weight: 700;
         color: {BRAND_BLUE};
-        opacity: 0.7;
-        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin: 1.2rem 0 0.6rem 0;
     }}
-    .droplet-divider::before,
-    .droplet-divider::after {{
-        content: "";
-        flex: 1;
-        height: 1px;
-        background: linear-gradient(90deg, transparent, {BRAND_BLUE}55, transparent);
-    }}
+
+    /* Chat bubbles */
     [data-testid="stChatMessage"] {{
         border-radius: 16px;
-        padding: 0.4rem 0.6rem;
-        margin-bottom: 0.4rem;
+        padding: 0.5rem 0.7rem;
+        margin-bottom: 0.5rem;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.05);
     }}
+    [data-testid="stChatMessageContent"] {{
+        font-size: 0.95rem;
+    }}
+
+    /* Quick action cards */
     div.stButton > button {{
-        border-radius: 999px;
-        border: 1px solid {BRAND_BLUE}55;
+        border-radius: 14px;
+        border: 1px solid #E3E9F0;
         background-color: {BRAND_WHITE};
         color: {BRAND_BLUE_DARK};
         font-weight: 600;
-        padding: 0.4rem 0.9rem;
+        padding: 0.7rem 0.5rem;
+        box-shadow: 0 2px 6px rgba(11, 118, 199, 0.06);
+        transition: all 0.15s ease-in-out;
     }}
     div.stButton > button:hover {{
         border-color: {BRAND_BLUE};
         color: {BRAND_BLUE};
         background-color: {BRAND_CREAM_SOFT};
+        box-shadow: 0 4px 12px rgba(11, 118, 199, 0.15);
+        transform: translateY(-2px);
     }}
+
+    /* Sidebar */
     section[data-testid="stSidebar"] {{
         background-color: {BRAND_WHITE};
         border-right: 1px solid #E5E9F0;
     }}
+
+    /* Floating WhatsApp button */
+    .whatsapp-float {{
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        z-index: 9999;
+        background-color: {WHATSAPP_GREEN};
+        color: white !important;
+        text-decoration: none !important;
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.6rem;
+        box-shadow: 0 4px 16px rgba(37, 211, 102, 0.45);
+        transition: transform 0.15s ease-in-out;
+    }}
+    .whatsapp-float:hover {{
+        transform: scale(1.08);
+    }}
+
+    /* Sidebar whatsapp link */
     .whatsapp-btn {{
         display: inline-flex;
         align-items: center;
@@ -153,6 +232,8 @@ st.markdown(
         opacity: 0.9;
     }}
     </style>
+
+    <a href="{WHATSAPP_LINK}" target="_blank" class="whatsapp-float" title="Chat on WhatsApp">💬</a>
     """,
     unsafe_allow_html=True,
 )
@@ -172,8 +253,10 @@ Use the following facts to answer user questions:
 - Help customers check for planned maintenance and scheduled outages.
 - Explain the available methods for paying NAWASA bills.
 - Provide NAWASA customer service contact information and transfer users to a representative when requested.
-- If the issue is an emergency, advise the user to contact NAWASA immediately and provide the appropriate emergency contact information.
-- If a customer wants to report a leak or speak to a human, let them know they can use the "Report a Leak" form or the WhatsApp button on this page.
+- If the issue is an emergency, advise the user to contact NAWASA immediately at (473) 440-2155.
+- NAWASA's official contact details: Phone (473) 440-2155, WhatsApp via https://wa.link/rt9dj1 (405-5245 / 459-6064 / 405-9143), Website https://nawasa.gd/. Share these when a customer asks how to reach NAWASA directly.
+- When a customer describes a specific problem (a leak, no water, low pressure, a billing issue) and gives at least a location, log it immediately using the log_water_report tool — do not tell the customer to fill out a separate form themselves. After logging it, confirm to the customer that it's been logged and let them know NAWASA staff will follow up. If you don't have their name or phone number yet, ask for it after logging so staff can reach them, but don't block logging the report on that.
+- The "Report a Leak" form and the WhatsApp button are alternative ways to reach NAWASA, but you should always try to log the report yourself first if the customer is describing it in chat.
 
 Be helpful, clear, patient, and reassuring.
 Keep responses concise, polite, and easy to understand.
@@ -212,7 +295,33 @@ def load_reports():
     return pd.read_csv(REPORTS_PATH)
 
 # ---------------------------------------------------------------------------
-# Sidebar: mode switch (Customer chat vs Staff portal) + settings
+# Tool the AI can call directly during conversation to log a report
+# ---------------------------------------------------------------------------
+def log_water_report(location: str, issue_type: str, description: str,
+                      name: str = "Not provided", phone: str = "Not provided") -> str:
+    """Logs a customer's water service issue into the NAWASA staff system so a
+    technician can follow up on it. Call this as soon as the customer has
+    described their problem and given at least a location — even in normal
+    conversation, without requiring them to fill out a separate form. If the
+    customer hasn't given their name or phone number, still log the report
+    using "Not provided" for those fields, but politely ask for them
+    afterward so staff can follow up directly.
+
+    Args:
+        location: The location or address where the issue is happening.
+        issue_type: One of "Leak", "No water supply", "Low pressure", "Billing issue", "Other".
+        description: A short description of the issue in the customer's own words.
+        name: The customer's name, if given.
+        phone: The customer's phone number, if given.
+
+    Returns:
+        A confirmation message that the report was logged.
+    """
+    save_report(name, phone, location, issue_type, description)
+    return "Report logged successfully in the NAWASA staff system. A technician will follow up."
+
+# ---------------------------------------------------------------------------
+# Sidebar
 # ---------------------------------------------------------------------------
 with st.sidebar:
     if os.path.exists(LOGO_PATH):
@@ -224,6 +333,8 @@ with st.sidebar:
         f'<a href="{WHATSAPP_LINK}" target="_blank" class="whatsapp-btn">📱 Chat on WhatsApp</a>',
         unsafe_allow_html=True,
     )
+    st.caption(f"📞 {NAWASA_PHONE}")
+    st.caption(f"🌐 [nawasa.gd]({NAWASA_WEBSITE})")
 
     st.divider()
     st.header("⚙️ Settings")
@@ -247,16 +358,21 @@ with st.sidebar:
         st.text(SYSTEM_INSTRUCTION)
 
 # ===========================================================================
-# STAFF PORTAL — password gated view of submitted reports
+# STAFF PORTAL
 # ===========================================================================
 if mode == "🔐 Staff Portal":
     st.markdown(
         f"""
-        <div class="aqua-header">
-            <div>
-                <div class="aqua-title">🔐 Staff Portal</div>
-                <div class="aqua-subtitle">Reports submitted by customers</div>
+        <div class="aqua-hero">
+            <div class="aqua-hero-content">
+                <div>
+                    <div class="aqua-hero-title">🔐 Staff Portal</div>
+                    <div class="aqua-hero-subtitle">Reports submitted by customers</div>
+                </div>
             </div>
+            <svg class="aqua-wave" viewBox="0 0 500 40" preserveAspectRatio="none">
+                <path class="aqua-wave-fill" d="M0,20 C150,45 350,-5 500,20 L500,40 L0,40 Z"></path>
+            </svg>
         </div>
         """,
         unsafe_allow_html=True,
@@ -266,6 +382,7 @@ if mode == "🔐 Staff Portal":
         st.session_state.staff_authed = False
 
     if not st.session_state.staff_authed:
+        st.markdown('<div class="aqua-card">', unsafe_allow_html=True)
         entered = st.text_input("Enter staff passcode", type="password")
         if st.button("Log in"):
             if entered == STAFF_PASSCODE:
@@ -273,6 +390,7 @@ if mode == "🔐 Staff Portal":
                 st.rerun()
             else:
                 st.error("Incorrect passcode.")
+        st.markdown('</div>', unsafe_allow_html=True)
         st.stop()
 
     st.success("Logged in as staff.")
@@ -302,25 +420,25 @@ if mode == "🔐 Staff Portal":
 # CUSTOMER CHAT MODE
 # ===========================================================================
 
-if os.path.exists(LOGO_PATH):
-    import base64
-    with open(LOGO_PATH, "rb") as f:
-        logo_b64 = base64.b64encode(f.read()).decode()
-    st.markdown(
-        f"""
-        <div class="aqua-header">
-            <img src="data:image/png;base64,{logo_b64}" />
+logo_html = f'<img src="data:image/png;base64,{logo_b64}" />' if logo_b64 else "💧"
+
+st.markdown(
+    f"""
+    <div class="aqua-hero">
+        <div class="aqua-hero-content">
+            {logo_html}
             <div>
-                <div class="aqua-title">💧 AquaAssist</div>
-                <div class="aqua-subtitle">Your Smart Water Support Assistant</div>
+                <div class="aqua-hero-title">AquaAssist</div>
+                <div class="aqua-hero-subtitle">Your Smart Water Support Assistant</div>
             </div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
-else:
-    st.title("💧 AquaAssist")
-    st.caption("Your Smart Water Support Assistant")
+        <svg class="aqua-wave" viewBox="0 0 500 40" preserveAspectRatio="none">
+            <path class="aqua-wave-fill" d="M0,20 C150,45 350,-5 500,20 L500,40 L0,40 Z"></path>
+        </svg>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 if not api_key:
     st.info("👈 Enter your Gemini API key in the sidebar to start chatting.")
@@ -341,6 +459,7 @@ if "chat" not in st.session_state or st.session_state.get("_key_used") != api_ke
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION,
                 temperature=0.7,
+                tools=[log_water_report],
             ),
         )
         st.session_state._key_used = api_key
@@ -349,35 +468,39 @@ if "chat" not in st.session_state or st.session_state.get("_key_used") != api_ke
         st.stop()
 
 # ---------------------------------------------------------------------------
-# Report a Leak — structured form, saved for staff to see
+# Report a Leak — structured form
 # ---------------------------------------------------------------------------
-with st.expander("🚿 Report a Leak / Issue (goes straight to NAWASA staff)"):
-    with st.form("leak_report_form", clear_on_submit=True):
-        r_name = st.text_input("Your name")
-        r_phone = st.text_input("Phone number")
-        r_location = st.text_input("Location / address of the issue")
-        r_issue_type = st.selectbox(
-            "Issue type",
-            ["Leak", "No water supply", "Low pressure", "Billing issue", "Other"],
-        )
-        r_description = st.text_area("Describe the issue")
-        submitted = st.form_submit_button("Submit report")
+st.markdown('<div class="aqua-section-label">🚿 Report an issue</div>', unsafe_allow_html=True)
+with st.container():
+    st.markdown('<div class="aqua-card">', unsafe_allow_html=True)
+    with st.expander("Fill out a report — goes straight to NAWASA staff"):
+        with st.form("leak_report_form", clear_on_submit=True):
+            r_name = st.text_input("Your name")
+            r_phone = st.text_input("Phone number")
+            r_location = st.text_input("Location / address of the issue")
+            r_issue_type = st.selectbox(
+                "Issue type",
+                ["Leak", "No water supply", "Low pressure", "Billing issue", "Other"],
+            )
+            r_description = st.text_area("Describe the issue")
+            submitted = st.form_submit_button("Submit report")
 
-        if submitted:
-            if not r_name or not r_phone or not r_location:
-                st.error("Please fill in your name, phone number, and location.")
-            else:
-                save_report(r_name, r_phone, r_location, r_issue_type, r_description)
-                st.success("✅ Your report has been submitted. NAWASA staff will follow up.")
+            if submitted:
+                if not r_name or not r_phone or not r_location:
+                    st.error("Please fill in your name, phone number, and location.")
+                else:
+                    save_report(r_name, r_phone, r_location, r_issue_type, r_description)
+                    st.success("✅ Your report has been submitted. NAWASA staff will follow up.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Quick actions
 # ---------------------------------------------------------------------------
-st.markdown('<div class="droplet-divider">💧 Quick actions 💧</div>', unsafe_allow_html=True)
+st.markdown('<div class="aqua-section-label">💧 Quick actions</div>', unsafe_allow_html=True)
 
 quick_actions = {
     "🚿 Report a Leak": "I'd like to report a water leak.",
-    "🛠️ Planned Maintenance": "Are there any scheduled outages or planned maintenance in my area?",
+    "🛠️ Maintenance": "Are there any scheduled outages or planned maintenance in my area?",
     "💳 Pay My Bill": "What are my options for paying my NAWASA bill?",
     "📞 Talk to a Rep": "I'd like to speak with a customer service representative.",
 }
@@ -392,6 +515,8 @@ for col, (label, prompt) in zip(qa_cols, quick_actions.items()):
 # ---------------------------------------------------------------------------
 # Render chat history
 # ---------------------------------------------------------------------------
+st.markdown('<div class="aqua-section-label">💬 Chat</div>', unsafe_allow_html=True)
+
 ASSISTANT_AVATAR = LOGO_PATH if os.path.exists(LOGO_PATH) else "💧"
 USER_AVATAR = "🧑"
 
