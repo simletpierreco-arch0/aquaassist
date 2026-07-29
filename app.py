@@ -66,177 +66,161 @@ if os.path.exists(LOGO_PATH):
 
 # ---------------------------------------------------------------------------
 # Custom CSS
+# NOTE: this HTML/CSS block is intentionally flush against the left margin
+# (no leading indentation on any line). Markdown treats any line indented
+# 4+ spaces as a literal code block and will NOT render it as HTML, even
+# with unsafe_allow_html=True. Keep every line here starting at column 0.
 # ---------------------------------------------------------------------------
-st.markdown(
-    f"""
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <style>
-    html, body, [class*="css"] {{
-        font-family: 'Poppins', sans-serif;
-    }}
-    .stApp {{
-        background-color: {BRAND_CREAM};
-    }}
-    .block-container {{
-        padding-top: 1rem;
-        max-width: 780px;
-    }}
+CSS_BLOCK = f"""<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+html, body, [class*="css"] {{
+font-family: 'Poppins', sans-serif;
+}}
+.stApp {{
+background-color: {BRAND_CREAM};
+}}
+.block-container {{
+padding-top: 1rem;
+max-width: 780px;
+}}
+.aqua-hero {{
+position: relative;
+background: linear-gradient(135deg, {BRAND_BLUE} 0%, {BRAND_BLUE_LIGHT} 100%);
+border-radius: 24px 24px 0 0;
+padding: 1.8rem 1.6rem 3.2rem 1.6rem;
+margin-bottom: -1px;
+overflow: hidden;
+}}
+.aqua-hero-content {{
+display: flex;
+align-items: center;
+gap: 1rem;
+position: relative;
+z-index: 2;
+}}
+.aqua-hero img {{
+width: 64px;
+height: 64px;
+border-radius: 50%;
+background: {BRAND_WHITE};
+padding: 5px;
+box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+}}
+.aqua-hero-title {{
+font-size: 1.7rem;
+font-weight: 800;
+color: {BRAND_WHITE};
+line-height: 1.15;
+letter-spacing: -0.02em;
+}}
+.aqua-hero-subtitle {{
+font-size: 0.95rem;
+color: rgba(255,255,255,0.9);
+font-weight: 500;
+}}
+.aqua-wave {{
+position: absolute;
+bottom: -2px;
+left: 0;
+width: 100%;
+line-height: 0;
+z-index: 1;
+}}
+.aqua-wave-fill {{
+fill: {BRAND_CREAM};
+}}
+.aqua-card {{
+background: {BRAND_WHITE};
+border-radius: 18px;
+padding: 1.1rem 1.3rem;
+margin-bottom: 1rem;
+box-shadow: 0 2px 12px rgba(11, 118, 199, 0.08);
+border: 1px solid #ECEFF3;
+}}
+.aqua-section-label {{
+display: flex;
+align-items: center;
+gap: 0.4rem;
+font-size: 0.8rem;
+font-weight: 700;
+color: {BRAND_BLUE};
+text-transform: uppercase;
+letter-spacing: 0.06em;
+margin: 1.2rem 0 0.6rem 0;
+}}
+[data-testid="stChatMessage"] {{
+border-radius: 16px;
+padding: 0.5rem 0.7rem;
+margin-bottom: 0.5rem;
+box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}}
+[data-testid="stChatMessageContent"] {{
+font-size: 0.95rem;
+}}
+div.stButton > button {{
+border-radius: 14px;
+border: 1px solid #E3E9F0;
+background-color: {BRAND_WHITE};
+color: {BRAND_BLUE_DARK};
+font-weight: 600;
+padding: 0.7rem 0.5rem;
+box-shadow: 0 2px 6px rgba(11, 118, 199, 0.06);
+transition: all 0.15s ease-in-out;
+}}
+div.stButton > button:hover {{
+border-color: {BRAND_BLUE};
+color: {BRAND_BLUE};
+background-color: {BRAND_CREAM_SOFT};
+box-shadow: 0 4px 12px rgba(11, 118, 199, 0.15);
+transform: translateY(-2px);
+}}
+section[data-testid="stSidebar"] {{
+background-color: {BRAND_WHITE};
+border-right: 1px solid #E5E9F0;
+}}
+.whatsapp-float {{
+position: fixed;
+bottom: 24px;
+right: 24px;
+z-index: 9999;
+background-color: {WHATSAPP_GREEN};
+color: white !important;
+text-decoration: none !important;
+width: 56px;
+height: 56px;
+border-radius: 50%;
+display: flex;
+align-items: center;
+justify-content: center;
+font-size: 1.6rem;
+box-shadow: 0 4px 16px rgba(37, 211, 102, 0.45);
+transition: transform 0.15s ease-in-out;
+}}
+.whatsapp-float:hover {{
+transform: scale(1.08);
+}}
+.whatsapp-btn {{
+display: inline-flex;
+align-items: center;
+gap: 0.5rem;
+background-color: {WHATSAPP_GREEN};
+color: white !important;
+text-decoration: none !important;
+padding: 0.55rem 1rem;
+border-radius: 999px;
+font-weight: 700;
+font-size: 0.9rem;
+width: 100%;
+justify-content: center;
+box-sizing: border-box;
+}}
+.whatsapp-btn:hover {{
+opacity: 0.9;
+}}
+</style>
+<a href="{WHATSAPP_LINK}" target="_blank" class="whatsapp-float" title="Chat on WhatsApp">💬</a>"""
 
-    /* Hero banner with wave */
-    .aqua-hero {{
-        position: relative;
-        background: linear-gradient(135deg, {BRAND_BLUE} 0%, {BRAND_BLUE_LIGHT} 100%);
-        border-radius: 24px 24px 0 0;
-        padding: 1.8rem 1.6rem 3.2rem 1.6rem;
-        margin-bottom: -1px;
-        overflow: hidden;
-    }}
-    .aqua-hero-content {{
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        position: relative;
-        z-index: 2;
-    }}
-    .aqua-hero img {{
-        width: 64px;
-        height: 64px;
-        border-radius: 50%;
-        background: {BRAND_WHITE};
-        padding: 5px;
-        box-shadow: 0 4px 14px rgba(0,0,0,0.18);
-    }}
-    .aqua-hero-title {{
-        font-size: 1.7rem;
-        font-weight: 800;
-        color: {BRAND_WHITE};
-        line-height: 1.15;
-        letter-spacing: -0.02em;
-    }}
-    .aqua-hero-subtitle {{
-        font-size: 0.95rem;
-        color: rgba(255,255,255,0.9);
-        font-weight: 500;
-    }}
-    .aqua-wave {{
-        position: absolute;
-        bottom: -2px;
-        left: 0;
-        width: 100%;
-        line-height: 0;
-        z-index: 1;
-    }}
-    .aqua-wave-fill {{
-        fill: {BRAND_CREAM};
-    }}
-
-    /* Card container */
-    .aqua-card {{
-        background: {BRAND_WHITE};
-        border-radius: 18px;
-        padding: 1.1rem 1.3rem;
-        margin-bottom: 1rem;
-        box-shadow: 0 2px 12px rgba(11, 118, 199, 0.08);
-        border: 1px solid #ECEFF3;
-    }}
-
-    /* Section label */
-    .aqua-section-label {{
-        display: flex;
-        align-items: center;
-        gap: 0.4rem;
-        font-size: 0.8rem;
-        font-weight: 700;
-        color: {BRAND_BLUE};
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        margin: 1.2rem 0 0.6rem 0;
-    }}
-
-    /* Chat bubbles */
-    [data-testid="stChatMessage"] {{
-        border-radius: 16px;
-        padding: 0.5rem 0.7rem;
-        margin-bottom: 0.5rem;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.05);
-    }}
-    [data-testid="stChatMessageContent"] {{
-        font-size: 0.95rem;
-    }}
-
-    /* Quick action cards */
-    div.stButton > button {{
-        border-radius: 14px;
-        border: 1px solid #E3E9F0;
-        background-color: {BRAND_WHITE};
-        color: {BRAND_BLUE_DARK};
-        font-weight: 600;
-        padding: 0.7rem 0.5rem;
-        box-shadow: 0 2px 6px rgba(11, 118, 199, 0.06);
-        transition: all 0.15s ease-in-out;
-    }}
-    div.stButton > button:hover {{
-        border-color: {BRAND_BLUE};
-        color: {BRAND_BLUE};
-        background-color: {BRAND_CREAM_SOFT};
-        box-shadow: 0 4px 12px rgba(11, 118, 199, 0.15);
-        transform: translateY(-2px);
-    }}
-
-    /* Sidebar */
-    section[data-testid="stSidebar"] {{
-        background-color: {BRAND_WHITE};
-        border-right: 1px solid #E5E9F0;
-    }}
-
-    /* Floating WhatsApp button */
-    .whatsapp-float {{
-        position: fixed;
-        bottom: 24px;
-        right: 24px;
-        z-index: 9999;
-        background-color: {WHATSAPP_GREEN};
-        color: white !important;
-        text-decoration: none !important;
-        width: 56px;
-        height: 56px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.6rem;
-        box-shadow: 0 4px 16px rgba(37, 211, 102, 0.45);
-        transition: transform 0.15s ease-in-out;
-    }}
-    .whatsapp-float:hover {{
-        transform: scale(1.08);
-    }}
-
-    /* Sidebar whatsapp link */
-    .whatsapp-btn {{
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        background-color: {WHATSAPP_GREEN};
-        color: white !important;
-        text-decoration: none !important;
-        padding: 0.55rem 1rem;
-        border-radius: 999px;
-        font-weight: 700;
-        font-size: 0.9rem;
-        width: 100%;
-        justify-content: center;
-        box-sizing: border-box;
-    }}
-    .whatsapp-btn:hover {{
-        opacity: 0.9;
-    }}
-    </style>
-
-    <a href="{WHATSAPP_LINK}" target="_blank" class="whatsapp-float" title="Chat on WhatsApp">💬</a>
-    """,
-    unsafe_allow_html=True,
-)
+st.markdown(CSS_BLOCK, unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # System instruction
@@ -361,22 +345,18 @@ with st.sidebar:
 # STAFF PORTAL
 # ===========================================================================
 if mode == "🔐 Staff Portal":
-    st.markdown(
-        f"""
-        <div class="aqua-hero">
-            <div class="aqua-hero-content">
-                <div>
-                    <div class="aqua-hero-title">🔐 Staff Portal</div>
-                    <div class="aqua-hero-subtitle">Reports submitted by customers</div>
-                </div>
-            </div>
-            <svg class="aqua-wave" viewBox="0 0 500 40" preserveAspectRatio="none">
-                <path class="aqua-wave-fill" d="M0,20 C150,45 350,-5 500,20 L500,40 L0,40 Z"></path>
-            </svg>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    staff_hero = f"""<div class="aqua-hero">
+<div class="aqua-hero-content">
+<div>
+<div class="aqua-hero-title">🔐 Staff Portal</div>
+<div class="aqua-hero-subtitle">Reports submitted by customers</div>
+</div>
+</div>
+<svg class="aqua-wave" viewBox="0 0 500 40" preserveAspectRatio="none">
+<path class="aqua-wave-fill" d="M0,20 C150,45 350,-5 500,20 L500,40 L0,40 Z"></path>
+</svg>
+</div>"""
+    st.markdown(staff_hero, unsafe_allow_html=True)
 
     if "staff_authed" not in st.session_state:
         st.session_state.staff_authed = False
@@ -422,23 +402,19 @@ if mode == "🔐 Staff Portal":
 
 logo_html = f'<img src="data:image/png;base64,{logo_b64}" />' if logo_b64 else "💧"
 
-st.markdown(
-    f"""
-    <div class="aqua-hero">
-        <div class="aqua-hero-content">
-            {logo_html}
-            <div>
-                <div class="aqua-hero-title">AquaAssist</div>
-                <div class="aqua-hero-subtitle">Your Smart Water Support Assistant</div>
-            </div>
-        </div>
-        <svg class="aqua-wave" viewBox="0 0 500 40" preserveAspectRatio="none">
-            <path class="aqua-wave-fill" d="M0,20 C150,45 350,-5 500,20 L500,40 L0,40 Z"></path>
-        </svg>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+chat_hero = f"""<div class="aqua-hero">
+<div class="aqua-hero-content">
+{logo_html}
+<div>
+<div class="aqua-hero-title">AquaAssist</div>
+<div class="aqua-hero-subtitle">Your Smart Water Support Assistant</div>
+</div>
+</div>
+<svg class="aqua-wave" viewBox="0 0 500 40" preserveAspectRatio="none">
+<path class="aqua-wave-fill" d="M0,20 C150,45 350,-5 500,20 L500,40 L0,40 Z"></path>
+</svg>
+</div>"""
+st.markdown(chat_hero, unsafe_allow_html=True)
 
 if not api_key:
     st.info("👈 Enter your Gemini API key in the sidebar to start chatting.")
