@@ -16,42 +16,6 @@ Folder layout expected:
 
 BEFORE DEPLOYING:
     STAFF_PASSCODE -> replace "changeme123" below, or set as env var / Streamlit secret
-
-WHAT CHANGED IN THIS PASS (read before demoing):
-  - NEW: single Welcome/Login screen. Customer picks "Continue as Guest" or
-    "Log in with an account", picks their language, and enters their Gemini
-    API key — all in one place, over a blue/white "watery wave" background.
-    There is no real user database behind "Log in with an account" (this
-    build has no backend auth system) — it simply captures a name + email
-    so the session is labelled as an account session instead of a guest
-    session. Wiring this to real authentication is future work.
-  - NEW: multiple chat sessions with history, like a typical AI chat app.
-    A "+ New chat" button in the sidebar saves the current conversation
-    under an auto-generated name (taken from the customer's first message)
-    and starts a fresh one. Past chats are listed and clickable to reload.
-    Note: reopening an old chat restores what was said, but continuing it
-    reseeds a fresh Gemini session from that transcript rather than a true
-    resumed server-side session — there can occasionally be small continuity
-    differences right after switching back to an old chat.
-  - MOVED: voice messages and file attachments are no longer a separate
-    "Quick actions" row — they now live directly beside the chat text box,
-    as a paperclip (attach) control built into Streamlit's chat input and a
-    compact mic button right next to it, so it reads as one input bar.
-  - RESTYLED: dropped the purple/pink reference palette entirely in favor of
-    NAWASA's blue/white, with a soft animated wave pattern behind the whole
-    app (not just the header) for a "watery" feel throughout.
-  - CHANGED: the UI chrome (buttons, labels, tabs) is no longer limited to 4
-    hand-translated languages. English is the only hand-written copy now;
-    every other language — including Grenadian Creole and anything in the
-    extended list (Japanese, Korean, etc.) or typed in freely — is
-    auto-translated by Gemini the first time it's selected and then cached
-    for the rest of the session, so the whole interface actually updates no
-    matter what language is chosen. This needs the Gemini API key to already
-    be entered; until then, the UI falls back to English. The AI's chat
-    replies already worked this way for any language — this brings the
-    surrounding UI text in line with that.
-  - Everything else (FAQ search, report tracking, staff portal, settings,
-    notifications) is unchanged in behavior from the previous build.
 """
 
 import os
@@ -83,6 +47,13 @@ try:
     HAS_TTS = True
 except ImportError:
     HAS_TTS = False
+
+try:
+    import folium
+    from streamlit_folium import st_folium
+    HAS_MAP = True
+except ImportError:
+    HAS_MAP = False
 
 # ---------------------------------------------------------------------------
 # NAWASA contact details
@@ -166,14 +137,21 @@ TTS_LANG_CODES = {
     "Hungarian": "hu", "Indonesian": "id", "Malay": "ms",
 }
 
+# ---------------------------------------------------------------------------
+# Grenada geography — for the report location picker
+# ---------------------------------------------------------------------------
+GRENADA_PARISHES = [
+    "St. George's (Capital area)", "St. Andrew's", "St. David's",
+    "St. John's", "St. Mark's", "St. Patrick's", "Carriacou and Petite Martinique",
+]
+GRENADA_CENTER = (12.1165, -61.6790)
+
 # UI text: English is the only hand-written copy — the single source of
 # truth for every button, label, and tab name. Every OTHER language,
 # including Grenadian Creole and anything from the extended list or typed
 # in freely (Japanese, Korean, or literally any language name), is
 # auto-translated by Gemini on first use and cached in session state, via
-# get_ui_dict()/translate_ui_text() below. This replaces the old approach of
-# hand-translating just 4 pinned languages and leaving everything else in
-# English.
+# get_ui_dict()/translate_ui_text() below.
 UI_TEXT = {
     "English": {
         "welcome": "Welcome to AquaAssist! 💧 I'm here to help with your NAWASA water services.",
@@ -212,8 +190,16 @@ UI_TEXT = {
         "login_key": "Gemini API key", "login_key_help": "Get a key at https://aistudio.google.com/",
         "login_lang": "Choose your language", "login_start": "Start chatting",
         "login_missing": "Please select a language and enter your API key first.",
+        "map_section_label": "📍 Pin location on map",
+        "map_parish_label": "Parish / Territory",
+        "map_address_label": "Street / Landmark Address",
+        "map_gps_button": "📡 Use My GPS Location",
+        "map_not_installed": "Interactive map isn't installed on this server — add `folium` and `streamlit-folium` to requirements.txt to enable it. Enter your parish and address manually for now.",
+        "map_pinned_caption": "Pinned location",
+        "map_click_hint": "Click or drag the pin to set the exact spot.",
     },
 }
+
 
 def translate_ui_text(language, client):
     """Translates every English UI_TEXT value into `language` in a single
@@ -244,12 +230,21 @@ def translate_ui_text(language, client):
         pass
     return None
 
+
 def get_ui_dict(language):
     """Returns the UI_TEXT dict for `language`, auto-translating and caching
-    it via Gemini the first time that language is used this session. Falls
-    back to English if there's no API key yet or translation fails — this
-    fallback resolves itself automatically once a key is entered, since a
-    fresh attempt is made (per language+key pair) on the next render."""
+    it via Gemini the first time that language is used this session.
+
+    IMPORTANT: unlike the earlier version of this function, a failed
+    translation attempt is NOT permanently remembered. It is only
+    rate-limited (so we don't hammer the API on every Streamlit rerun,
+    e.g. while the user is still typing their key) and a warning is
+    surfaced via st.session_state["ui_translation_warning"] so the caller
+    can show the user *why* the UI is still in English, instead of the
+    previous silent-forever fallback.
+    """
+    import time
+
     if not language or language == "English":
         return UI_TEXT["English"]
 
@@ -261,12 +256,15 @@ def get_ui_dict(language):
     if not api_key:
         return UI_TEXT["English"]
 
-    # Avoid re-attempting a failed translation on every rerun with the same
-    # (language, key) pair — e.g. while the API key is still being typed.
-    attempted = st.session_state.setdefault("ui_translation_attempted", {})
-    if attempted.get(language) == api_key:
+    # Rate-limit retries per (language, key) pair instead of permanently
+    # blocking them — a transient failure (rate limit, network hiccup, bad
+    # JSON) should be retried on a later rerun, not locked to English forever.
+    attempts = st.session_state.setdefault("ui_translation_attempts", {})
+    attempt_key = f"{language}::{api_key}"
+    last_try = attempts.get(attempt_key, 0)
+    if time.time() - last_try < 8:
         return UI_TEXT["English"]
-    attempted[language] = api_key
+    attempts[attempt_key] = time.time()
 
     try:
         client = genai.Client(api_key=api_key)
@@ -274,10 +272,14 @@ def get_ui_dict(language):
             translated = translate_ui_text(language, client)
         if translated:
             cache[language] = translated
+            st.session_state.pop("ui_translation_warning", None)
             return translated
+        st.session_state["ui_translation_warning"] = language
     except Exception:
-        pass
+        st.session_state["ui_translation_warning"] = language
+
     return UI_TEXT["English"]
+
 
 def t(key):
     lang = st.session_state.get("selected_language") or "English"
@@ -318,12 +320,14 @@ FAQS = [
      "a": "The main office is on the Carenage, St. George's, with sub-offices in Gouyave, Grenville, Sauteurs, St. David's, and Grand Anse."},
 ]
 
+
 def search_faqs(query, faq_list=None):
     faq_list = faq_list if faq_list is not None else FAQS
     if not query:
         return faq_list
     q = query.lower()
     return [f for f in faq_list if q in f["q"].lower() or q in f["a"].lower() or q in f["category"].lower()]
+
 
 def get_translated_faqs(language, client):
     """Returns the FAQ list translated into `language`, using Gemini once per
@@ -361,7 +365,6 @@ def get_translated_faqs(language, client):
 
 # ---------------------------------------------------------------------------
 # Brand palette — blue & white only, with dark mode / high contrast swaps.
-# (Purple/pink reference design intentionally NOT used — NAWASA blue instead.)
 # ---------------------------------------------------------------------------
 if st.session_state.high_contrast:
     BRAND_BLUE = "#004C99"
@@ -922,8 +925,9 @@ if not st.session_state.auth_done:
         extra = st.selectbox("Search / select a language", [""] + EXTENDED_LANGUAGES,
                               index=(EXTENDED_LANGUAGES.index(st.session_state.selected_language) + 1)
                               if st.session_state.selected_language in EXTENDED_LANGUAGES else 0)
-        if extra:
+        if extra and extra != st.session_state.selected_language:
             st.session_state.selected_language = extra
+            st.rerun()
         st.caption("Don't see your language? Type any language or dialect below.")
         custom_lang = st.text_input("Any other language", key="login_custom_lang",
                                      placeholder="e.g. Haitian Creole, Tagalog, Igbo...")
@@ -933,6 +937,8 @@ if not st.session_state.auth_done:
 
     if st.session_state.selected_language:
         st.caption(f"Selected: **{st.session_state.selected_language}**")
+        if st.session_state.get("ui_translation_warning") == st.session_state.selected_language:
+            st.caption(f"⚠️ Couldn't translate the interface into {st.session_state.selected_language} yet — showing English. Check your API key; this will retry automatically.")
 
     st.divider()
 
@@ -1067,6 +1073,10 @@ with st.sidebar:
         st.caption("📍 One-tap GPS: enabled")
     else:
         st.caption("📍 One-tap GPS: not installed (manual location entry still works)")
+    if HAS_MAP:
+        st.caption("🗺️ Interactive Grenada map: enabled")
+    else:
+        st.caption("🗺️ Interactive Grenada map: not installed (manual lat/lng entry still works)")
 
 # ===========================================================================
 # STAFF PORTAL
@@ -1249,11 +1259,6 @@ with tab_chat:
         with st.chat_message("assistant", avatar=ASSISTANT_AVATAR):
             st.markdown(t("welcome"))
 
-    # --- Input bar: text + built-in file attach (paperclip), plus a compact
-    # mic button right beside it for voice messages, and the voice-reply
-    # toggle. All grouped together so it reads as one input area, per the
-    # request to move voice/attach into the text bar instead of a separate
-    # quick-actions row.
     input_row = st.columns([0.09, 0.08, 0.83])
     with input_row[0]:
         st.markdown('<div class="aqua-mic-btn">', unsafe_allow_html=True)
@@ -1284,8 +1289,6 @@ with tab_chat:
                     voice_text_input = ("__AUDIO__", uploaded_audio.read(), uploaded_audio.type or "audio/mpeg")
                     st.session_state["_mic_open"] = False
 
-    # Streamlit's built-in chat_input with accept_file gives the text box its
-    # own attach (paperclip) icon, so files travel with the typed message.
     try:
         chat_submission = st.chat_input(
             t("ask_placeholder"), accept_file=True,
@@ -1294,8 +1297,6 @@ with tab_chat:
         typed_input = chat_submission.text if chat_submission else None
         uploaded_files = chat_submission.files if chat_submission else []
     except TypeError:
-        # Installed Streamlit version predates accept_file — fall back to a
-        # plain text box; attachments then only work via the Report tab.
         typed_input = st.chat_input(t("ask_placeholder"))
         uploaded_files = []
 
@@ -1451,27 +1452,91 @@ with tab_faq:
 # ===================== REPORT & TRACK TAB =====================
 with tab_report:
     st.markdown(f'<div class="aqua-section-label">{t("report_issue")}</div>', unsafe_allow_html=True)
+
+    # --- Grenada location picker: parish + landmark + physical (terrain) map pin ---
+    st.markdown(f'<div class="aqua-section-label">{t("map_section_label")}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="aqua-card">', unsafe_allow_html=True)
+
+    pick_col1, pick_col2 = st.columns(2)
+    with pick_col1:
+        default_parish_idx = (
+            GRENADA_PARISHES.index(st.session_state.get("report_parish"))
+            if st.session_state.get("report_parish") in GRENADA_PARISHES else 0
+        )
+        st.session_state.report_parish = st.selectbox(
+            t("map_parish_label"), GRENADA_PARISHES, index=default_parish_idx, key="report_parish_select",
+        )
+    with pick_col2:
+        st.session_state.report_landmark = st.text_input(
+            t("map_address_label"), value=st.session_state.get("report_landmark", ""),
+            key="report_landmark_input", placeholder="e.g. New Life Grocery, Main road",
+        )
+
+    if "report_pin" not in st.session_state:
+        st.session_state.report_pin = {"lat": GRENADA_CENTER[0], "lng": GRENADA_CENTER[1]}
+
+    gps_col, hint_col = st.columns([1, 2])
+    with gps_col:
+        if HAS_GEOLOCATION:
+            if st.button(t("map_gps_button"), key="map_gps_btn", use_container_width=True):
+                coords = streamlit_geolocation()
+                if coords and coords.get("latitude"):
+                    st.session_state.report_pin = {"lat": coords["latitude"], "lng": coords["longitude"]}
+                    st.rerun()
+    with hint_col:
+        if HAS_MAP:
+            st.caption(t("map_click_hint"))
+
+    if HAS_MAP:
+        m = folium.Map(
+            location=[st.session_state.report_pin["lat"], st.session_state.report_pin["lng"]],
+            zoom_start=12,
+            tiles="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+            attr="Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)",
+        )
+        folium.Marker(
+            [st.session_state.report_pin["lat"], st.session_state.report_pin["lng"]],
+            draggable=True,
+            tooltip=t("map_click_hint"),
+        ).add_to(m)
+        map_result = st_folium(m, height=340, use_container_width=True, key="grenada_pin_map")
+        if map_result and map_result.get("last_clicked"):
+            new_lat = map_result["last_clicked"]["lat"]
+            new_lng = map_result["last_clicked"]["lng"]
+            if (round(new_lat, 6), round(new_lng, 6)) != (
+                round(st.session_state.report_pin["lat"], 6), round(st.session_state.report_pin["lng"], 6)
+            ):
+                st.session_state.report_pin = {"lat": new_lat, "lng": new_lng}
+                st.rerun()
+        st.caption(f"📍 {t('map_pinned_caption')}: {st.session_state.report_pin['lat']:.4f}, {st.session_state.report_pin['lng']:.4f}")
+    else:
+        st.caption(t("map_not_installed"))
+        manual_col1, manual_col2 = st.columns(2)
+        with manual_col1:
+            st.session_state.report_pin["lat"] = st.number_input(
+                "Latitude", value=float(st.session_state.report_pin["lat"]), format="%.5f", key="manual_lat",
+            )
+        with manual_col2:
+            st.session_state.report_pin["lng"] = st.number_input(
+                "Longitude", value=float(st.session_state.report_pin["lng"]), format="%.5f", key="manual_lng",
+            )
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    _composed_location_parts = [
+        st.session_state.report_landmark.strip() if st.session_state.report_landmark else "",
+        st.session_state.report_parish,
+    ]
+    composed_location = ", ".join([p for p in _composed_location_parts if p])
+    composed_location += f" (GPS: {st.session_state.report_pin['lat']:.5f}, {st.session_state.report_pin['lng']:.5f})"
+
     st.markdown('<div class="aqua-card">', unsafe_allow_html=True)
     with st.expander(t("report_form_expander"), expanded=True):
         with st.form("leak_report_form", clear_on_submit=True):
             r_name = st.text_input(t("field_name"), value=st.session_state.customer_name)
             r_phone = st.text_input(t("field_phone"))
+            r_location = st.text_input(t("field_location"), value=composed_location)
 
-            loc_col1, loc_col2 = st.columns([3, 1])
-            with loc_col1:
-                r_location = st.text_input(t("field_location"))
-            with loc_col2:
-                if HAS_GEOLOCATION:
-                    coords = streamlit_geolocation()
-                    if coords and coords.get("latitude"):
-                        r_location = f"{r_location} (GPS: {coords['latitude']:.5f}, {coords['longitude']:.5f})"
-                        st.caption("📍 location captured")
-                else:
-                    st.caption("📍 GPS not installed — enter address manually")
-
-            # Internal values stay in English for consistency in the Staff
-            # Portal regardless of the customer's language; only the label
-            # shown to the customer is translated.
             issue_type_keys = ["issue_leak", "issue_no_water", "issue_low_pressure", "issue_billing",
                                 "issue_burst", "issue_hydrant", "issue_quality", "issue_other"]
             issue_type_values = ["Leak", "No water supply", "Low pressure", "Billing issue",
