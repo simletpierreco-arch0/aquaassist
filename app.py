@@ -144,6 +144,27 @@ UI_TEXT = {
         "your_name": "Your name", "continue": "Continue",
         "call_us": "Call Us", "whatsapp_label": "WhatsApp", "chat_now": "Chat now",
         "website_label": "Website",
+        "qa_report_label": "🚿 Report a Leak", "qa_report_prompt": "I'd like to report a water leak.",
+        "qa_maint_label": "🛠️ Maintenance", "qa_maint_prompt": "Are there any scheduled outages or planned maintenance in my area?",
+        "qa_bill_label": "💳 Pay My Bill", "qa_bill_prompt": "What are my options for paying my NAWASA bill?",
+        "qa_rep_label": "📞 Talk to a Rep", "qa_rep_prompt": "I'd like to speak with a customer service representative.",
+        "settings_preferences": "⚙️ Preferences", "preferred_language": "Preferred language",
+        "dark_mode": "🌙 Dark mode", "high_contrast": "🔲 High contrast mode", "large_text": "🔠 Larger text",
+        "accessibility_note": "Accessibility: this app supports keyboard navigation and screen readers natively through Streamlit's standard components.",
+        "settings_conversation": "💬 Conversation",
+        "conversation_note": "messages in this session. Go to the History tab to search or clear your conversation.",
+        "field_name": "Your name", "field_phone": "Phone number",
+        "field_location": "Location / address of the issue", "field_description": "Describe the issue",
+        "field_issue_type": "Issue type", "field_attachment": "Attach a photo, video, or document (optional)",
+        "submit_report": "Submit report", "report_form_expander": "Fill out a report — goes straight to NAWASA staff",
+        "track_report_label": "📍 Track a report", "track_report_placeholder": "Enter your reference number (e.g. NW-A1B2C3D)",
+        "get_notified": "🔔 Get notified", "notify_contact_label": "Email or phone number",
+        "notify_categories_label": "Notify me about", "subscribe_button": "Subscribe",
+        "voice_toggle_label": "🔊 Speak replies aloud", "voice_popover_label": "🎤 Send a voice message",
+        "voice_help_on": "Uses gTTS to read the bot's replies aloud.", "voice_help_off": "Install gTTS to enable this.",
+        "issue_leak": "Leak", "issue_no_water": "No water supply", "issue_low_pressure": "Low pressure",
+        "issue_billing": "Billing issue", "issue_burst": "Burst main", "issue_hydrant": "Damaged hydrant",
+        "issue_quality": "Water quality concern", "issue_other": "Other",
     },
     "Grenadian Creole": {
         "welcome": "Welcome to AquaAssist! 💧 Ah deh fu help yuh wit yuh NAWASA watah service dem.",
@@ -154,6 +175,27 @@ UI_TEXT = {
         "your_name": "Yuh name", "continue": "Continue",
         "call_us": "Call We", "whatsapp_label": "WhatsApp", "chat_now": "Chat now",
         "website_label": "Website",
+        "qa_report_label": "🚿 Report a Leak", "qa_report_prompt": "Ah want fu report a watah leak.",
+        "qa_maint_label": "🛠️ Maintenance", "qa_maint_prompt": "It got any outage or maintenance planned fu meh area?",
+        "qa_bill_label": "💳 Pay My Bill", "qa_bill_prompt": "How ah could pay meh NAWASA bill?",
+        "qa_rep_label": "📞 Talk to a Rep", "qa_rep_prompt": "Ah want fu talk to a customer service representative.",
+        "settings_preferences": "⚙️ Preferences", "preferred_language": "Language yuh prefer",
+        "dark_mode": "🌙 Dark mode", "high_contrast": "🔲 High contrast mode", "large_text": "🔠 Bigger letters",
+        "accessibility_note": "Accessibility: dis app support keyboard navigation and screen readers.",
+        "settings_conversation": "💬 Chat",
+        "conversation_note": "message dem in dis session. Go to the History tab fu search or clear yuh chat.",
+        "field_name": "Yuh name", "field_phone": "Phone numbah",
+        "field_location": "Location / address wey de issue deh", "field_description": "Describe de issue",
+        "field_issue_type": "Kine ah issue", "field_attachment": "Attach a photo, video, or document (optional)",
+        "submit_report": "Send de report", "report_form_expander": "Fill out a report — it does go straight to NAWASA staff",
+        "track_report_label": "📍 Track a report", "track_report_placeholder": "Put in yuh reference numbah (e.g. NW-A1B2C3D)",
+        "get_notified": "🔔 Get notify", "notify_contact_label": "Email or phone numbah",
+        "notify_categories_label": "Notify me bout", "subscribe_button": "Subscribe",
+        "voice_toggle_label": "🔊 Speak reply dem out loud", "voice_popover_label": "🎤 Send a voice message",
+        "voice_help_on": "Uses gTTS fu read de bot reply dem out loud.", "voice_help_off": "Install gTTS fu enable dis.",
+        "issue_leak": "Leak", "issue_no_water": "No watah supply", "issue_low_pressure": "Low pressure",
+        "issue_billing": "Billing issue", "issue_burst": "Burst main", "issue_hydrant": "Damaged hydrant",
+        "issue_quality": "Watah quality concern", "issue_other": "Other",
     },
     "Spanish": {
         "welcome": "¡Bienvenido a AquaAssist! 💧 Estoy aquí para ayudarte con los servicios de agua de NAWASA.",
@@ -164,6 +206,27 @@ UI_TEXT = {
         "your_name": "Tu nombre", "continue": "Continuar",
         "call_us": "Llámanos", "whatsapp_label": "WhatsApp", "chat_now": "Chatea ahora",
         "website_label": "Sitio web",
+        "qa_report_label": "🚿 Reportar una Fuga", "qa_report_prompt": "Quisiera reportar una fuga de agua.",
+        "qa_maint_label": "🛠️ Mantenimiento", "qa_maint_prompt": "¿Hay cortes o mantenimiento programado en mi área?",
+        "qa_bill_label": "💳 Pagar mi Factura", "qa_bill_prompt": "¿Cuáles son mis opciones para pagar mi factura de NAWASA?",
+        "qa_rep_label": "📞 Hablar con un Agente", "qa_rep_prompt": "Quisiera hablar con un representante de servicio al cliente.",
+        "settings_preferences": "⚙️ Preferencias", "preferred_language": "Idioma preferido",
+        "dark_mode": "🌙 Modo oscuro", "high_contrast": "🔲 Modo de alto contraste", "large_text": "🔠 Texto más grande",
+        "accessibility_note": "Accesibilidad: esta app admite navegación por teclado y lectores de pantalla de forma nativa.",
+        "settings_conversation": "💬 Conversación",
+        "conversation_note": "mensajes en esta sesión. Ve a la pestaña Historial para buscar o borrar tu conversación.",
+        "field_name": "Tu nombre", "field_phone": "Número de teléfono",
+        "field_location": "Ubicación / dirección del problema", "field_description": "Describe el problema",
+        "field_issue_type": "Tipo de problema", "field_attachment": "Adjunta una foto, video o documento (opcional)",
+        "submit_report": "Enviar reporte", "report_form_expander": "Completa un reporte — va directo al personal de NAWASA",
+        "track_report_label": "📍 Rastrear un reporte", "track_report_placeholder": "Ingresa tu número de referencia (ej. NW-A1B2C3D)",
+        "get_notified": "🔔 Recibir notificaciones", "notify_contact_label": "Correo o número de teléfono",
+        "notify_categories_label": "Notificarme sobre", "subscribe_button": "Suscribirse",
+        "voice_toggle_label": "🔊 Escuchar las respuestas en voz alta", "voice_popover_label": "🎤 Enviar un mensaje de voz",
+        "voice_help_on": "Usa gTTS para leer las respuestas del bot en voz alta.", "voice_help_off": "Instala gTTS para habilitar esto.",
+        "issue_leak": "Fuga", "issue_no_water": "Sin suministro de agua", "issue_low_pressure": "Baja presión",
+        "issue_billing": "Problema de facturación", "issue_burst": "Rotura de tubería principal", "issue_hydrant": "Hidrante dañado",
+        "issue_quality": "Problema de calidad del agua", "issue_other": "Otro",
     },
     "French": {
         "welcome": "Bienvenue chez AquaAssist! 💧 Je suis là pour vous aider avec les services d'eau de la NAWASA.",
@@ -174,6 +237,27 @@ UI_TEXT = {
         "your_name": "Votre nom", "continue": "Continuer",
         "call_us": "Appelez-nous", "whatsapp_label": "WhatsApp", "chat_now": "Discuter maintenant",
         "website_label": "Site web",
+        "qa_report_label": "🚿 Signaler une Fuite", "qa_report_prompt": "Je voudrais signaler une fuite d'eau.",
+        "qa_maint_label": "🛠️ Entretien", "qa_maint_prompt": "Y a-t-il des coupures ou un entretien prévu dans ma région?",
+        "qa_bill_label": "💳 Payer ma Facture", "qa_bill_prompt": "Quelles sont mes options pour payer ma facture NAWASA?",
+        "qa_rep_label": "📞 Parler à un Agent", "qa_rep_prompt": "Je voudrais parler à un représentant du service client.",
+        "settings_preferences": "⚙️ Préférences", "preferred_language": "Langue préférée",
+        "dark_mode": "🌙 Mode sombre", "high_contrast": "🔲 Mode contraste élevé", "large_text": "🔠 Texte plus grand",
+        "accessibility_note": "Accessibilité: cette application prend en charge la navigation au clavier et les lecteurs d'écran nativement.",
+        "settings_conversation": "💬 Conversation",
+        "conversation_note": "messages dans cette session. Allez à l'onglet Historique pour rechercher ou effacer votre conversation.",
+        "field_name": "Votre nom", "field_phone": "Numéro de téléphone",
+        "field_location": "Emplacement / adresse du problème", "field_description": "Décrivez le problème",
+        "field_issue_type": "Type de problème", "field_attachment": "Joindre une photo, vidéo ou document (facultatif)",
+        "submit_report": "Envoyer le signalement", "report_form_expander": "Remplissez un signalement — il va directement au personnel de la NAWASA",
+        "track_report_label": "📍 Suivre un signalement", "track_report_placeholder": "Entrez votre numéro de référence (ex. NW-A1B2C3D)",
+        "get_notified": "🔔 Recevoir des notifications", "notify_contact_label": "E-mail ou numéro de téléphone",
+        "notify_categories_label": "Me notifier à propos de", "subscribe_button": "S'abonner",
+        "voice_toggle_label": "🔊 Lire les réponses à voix haute", "voice_popover_label": "🎤 Envoyer un message vocal",
+        "voice_help_on": "Utilise gTTS pour lire les réponses du bot à voix haute.", "voice_help_off": "Installez gTTS pour activer ceci.",
+        "issue_leak": "Fuite", "issue_no_water": "Pas d'eau", "issue_low_pressure": "Faible pression",
+        "issue_billing": "Problème de facturation", "issue_burst": "Canalisation principale rompue", "issue_hydrant": "Borne d'incendie endommagée",
+        "issue_quality": "Problème de qualité de l'eau", "issue_other": "Autre",
     },
 }
 
@@ -886,10 +970,10 @@ tab_chat, tab_faq, tab_report, tab_history, tab_settings = st.tabs(
 with tab_chat:
     st.markdown(f'<div class="aqua-section-label">{t("quick_actions")}</div>', unsafe_allow_html=True)
     quick_actions = {
-        "🚿 Report a Leak": "I'd like to report a water leak.",
-        "🛠️ Maintenance": "Are there any scheduled outages or planned maintenance in my area?",
-        "💳 Pay My Bill": "What are my options for paying my NAWASA bill?",
-        "📞 Talk to a Rep": "I'd like to speak with a customer service representative.",
+        t("qa_report_label"): t("qa_report_prompt"),
+        t("qa_maint_label"): t("qa_maint_prompt"),
+        t("qa_bill_label"): t("qa_bill_prompt"),
+        t("qa_rep_label"): t("qa_rep_prompt"),
     }
     qa_cols = st.columns(len(quick_actions))
     queued_prompt = None
@@ -901,14 +985,14 @@ with tab_chat:
     voice_col1, voice_col2 = st.columns([1, 1])
     with voice_col1:
         st.session_state.voice_replies = st.toggle(
-            "🔊 Speak replies aloud", value=st.session_state.voice_replies,
+            t("voice_toggle_label"), value=st.session_state.voice_replies,
             disabled=not HAS_TTS,
-            help="Uses gTTS to read the bot's replies aloud." if HAS_TTS else "Install gTTS to enable this.",
+            help=t("voice_help_on") if HAS_TTS else t("voice_help_off"),
         )
 
     voice_text_input = None
     with voice_col2:
-        with st.popover("🎤 Send a voice message"):
+        with st.popover(t("voice_popover_label")):
             if HAS_MIC_RECORDER:
                 audio_bytes = audio_recorder(text="Tap to record", icon_size="2x")
                 if audio_bytes:
@@ -1066,49 +1150,55 @@ with tab_faq:
 with tab_report:
     st.markdown(f'<div class="aqua-section-label">{t("report_issue")}</div>', unsafe_allow_html=True)
     st.markdown('<div class="aqua-card">', unsafe_allow_html=True)
-    with st.form("leak_report_form", clear_on_submit=True):
-        r_name = st.text_input("Your name", value=st.session_state.customer_name)
-        r_phone = st.text_input("Phone number")
+    with st.expander(t("report_form_expander"), expanded=True):
+        with st.form("leak_report_form", clear_on_submit=True):
+            r_name = st.text_input(t("field_name"), value=st.session_state.customer_name)
+            r_phone = st.text_input(t("field_phone"))
 
-        loc_col1, loc_col2 = st.columns([3, 1])
-        with loc_col1:
-            r_location = st.text_input("Location / address of the issue")
-        with loc_col2:
-            if HAS_GEOLOCATION:
-                coords = streamlit_geolocation()
-                if coords and coords.get("latitude"):
-                    r_location = f"{r_location} (GPS: {coords['latitude']:.5f}, {coords['longitude']:.5f})"
-                    st.caption("📍 location captured")
-            else:
-                st.caption("📍 GPS not installed — enter address manually")
+            loc_col1, loc_col2 = st.columns([3, 1])
+            with loc_col1:
+                r_location = st.text_input(t("field_location"))
+            with loc_col2:
+                if HAS_GEOLOCATION:
+                    coords = streamlit_geolocation()
+                    if coords and coords.get("latitude"):
+                        r_location = f"{r_location} (GPS: {coords['latitude']:.5f}, {coords['longitude']:.5f})"
+                        st.caption("📍 location captured")
+                else:
+                    st.caption("📍 GPS not installed — enter address manually")
 
-        r_issue_type = st.selectbox("Issue type", [
-            "Leak", "No water supply", "Low pressure", "Billing issue",
-            "Burst main", "Damaged hydrant", "Water quality concern", "Other",
-        ])
-        r_description = st.text_area("Describe the issue")
-        r_attachment = st.file_uploader("Attach a photo, video, or document (optional)",
-                                          type=["jpg", "jpeg", "png", "mp4", "mov", "pdf", "doc", "docx"])
-        submitted = st.form_submit_button("Submit report")
+            # Internal values stay in English for consistency in the Staff
+            # Portal regardless of the customer's language; only the label
+            # shown to the customer is translated.
+            issue_type_keys = ["issue_leak", "issue_no_water", "issue_low_pressure", "issue_billing",
+                                "issue_burst", "issue_hydrant", "issue_quality", "issue_other"]
+            issue_type_values = ["Leak", "No water supply", "Low pressure", "Billing issue",
+                                  "Burst main", "Damaged hydrant", "Water quality concern", "Other"]
+            r_issue_type = st.selectbox(t("field_issue_type"), issue_type_values,
+                                          format_func=lambda v: t(issue_type_keys[issue_type_values.index(v)]))
+            r_description = st.text_area(t("field_description"))
+            r_attachment = st.file_uploader(t("field_attachment"),
+                                              type=["jpg", "jpeg", "png", "mp4", "mov", "pdf", "doc", "docx"])
+            submitted = st.form_submit_button(t("submit_report"))
 
-        if submitted:
-            if not r_name or not r_phone or not r_location:
-                st.error("Please fill in your name, phone number, and location.")
-            else:
-                attachment_name = ""
-                if r_attachment is not None:
-                    ensure_files()
-                    attachment_name = f"{uuid.uuid4().hex[:8]}_{r_attachment.name}"
-                    with open(os.path.join(ATTACHMENTS_DIR, attachment_name), "wb") as out:
-                        out.write(r_attachment.read())
-                reference = save_report(r_name, r_phone, r_location, r_issue_type,
-                                         r_description, attachment_name)
-                st.success(f"✅ Report submitted! Your reference number is **{reference}** — save this to track your report below.")
+            if submitted:
+                if not r_name or not r_phone or not r_location:
+                    st.error("Please fill in your name, phone number, and location.")
+                else:
+                    attachment_name = ""
+                    if r_attachment is not None:
+                        ensure_files()
+                        attachment_name = f"{uuid.uuid4().hex[:8]}_{r_attachment.name}"
+                        with open(os.path.join(ATTACHMENTS_DIR, attachment_name), "wb") as out:
+                            out.write(r_attachment.read())
+                    reference = save_report(r_name, r_phone, r_location, r_issue_type,
+                                             r_description, attachment_name)
+                    st.success(f"✅ Report submitted! Your reference number is **{reference}** — save this to track your report below.")
     st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="aqua-section-label">📍 Track a report</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="aqua-section-label">{t("track_report_label")}</div>', unsafe_allow_html=True)
     st.markdown('<div class="aqua-card">', unsafe_allow_html=True)
-    track_ref = st.text_input("Enter your reference number (e.g. NW-A1B2C3D)")
+    track_ref = st.text_input(t("track_report_placeholder"))
     if track_ref:
         result = track_report(track_ref)
         if result is None:
@@ -1123,14 +1213,14 @@ with tab_report:
             st.write(f"**Submitted:** {result['timestamp']}")
     st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="aqua-section-label">🔔 Get notified</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="aqua-section-label">{t("get_notified")}</div>', unsafe_allow_html=True)
     st.markdown('<div class="aqua-card">', unsafe_allow_html=True)
     with st.form("notify_form", clear_on_submit=True):
-        notify_contact = st.text_input("Email or phone number")
-        notify_categories = st.multiselect("Notify me about", [
+        notify_contact = st.text_input(t("notify_contact_label"))
+        notify_categories = st.multiselect(t("notify_categories_label"), [
             "Planned maintenance", "Water outages", "Emergency repairs", "Service updates",
         ])
-        if st.form_submit_button("Subscribe"):
+        if st.form_submit_button(t("subscribe_button")):
             if notify_contact and notify_categories:
                 save_notification_signup(notify_contact, notify_categories)
                 st.success("You're subscribed to notifications.")
@@ -1140,24 +1230,24 @@ with tab_report:
 
 # ===================== SETTINGS TAB =====================
 with tab_settings:
-    st.markdown('<div class="aqua-section-label">⚙️ Preferences</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="aqua-section-label">{t("settings_preferences")}</div>', unsafe_allow_html=True)
     st.markdown('<div class="aqua-card">', unsafe_allow_html=True)
 
-    new_lang = st.selectbox("Preferred language", PRIMARY_LANGUAGES + EXTENDED_LANGUAGES,
+    new_lang = st.selectbox(t("preferred_language"), PRIMARY_LANGUAGES + EXTENDED_LANGUAGES,
                               index=(PRIMARY_LANGUAGES + EXTENDED_LANGUAGES).index(st.session_state.selected_language)
                               if st.session_state.selected_language in PRIMARY_LANGUAGES + EXTENDED_LANGUAGES else 0)
     if new_lang != st.session_state.selected_language:
         st.session_state.selected_language = new_lang
         st.rerun()
 
-    st.session_state.dark_mode = st.toggle("🌙 Dark mode", value=st.session_state.dark_mode)
-    st.session_state.high_contrast = st.toggle("🔲 High contrast mode", value=st.session_state.high_contrast)
-    st.session_state.large_text = st.toggle("🔠 Larger text", value=st.session_state.large_text)
-    st.caption("Accessibility: this app supports keyboard navigation and screen readers natively through Streamlit's standard components.")
+    st.session_state.dark_mode = st.toggle(t("dark_mode"), value=st.session_state.dark_mode)
+    st.session_state.high_contrast = st.toggle(t("high_contrast"), value=st.session_state.high_contrast)
+    st.session_state.large_text = st.toggle(t("large_text"), value=st.session_state.large_text)
+    st.caption(t("accessibility_note"))
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="aqua-section-label">💬 Conversation</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="aqua-section-label">{t("settings_conversation")}</div>', unsafe_allow_html=True)
     st.markdown('<div class="aqua-card">', unsafe_allow_html=True)
-    st.caption(f"{len(st.session_state.messages)} messages in this session. Go to the History tab to search or clear your conversation.")
+    st.caption(f"{len(st.session_state.messages)} {t('conversation_note')}")
     st.markdown('</div>', unsafe_allow_html=True)
