@@ -70,11 +70,18 @@ WHATSAPP_LINK = NAWASA_WHATSAPP_LINK
 LOGO_PATH = os.path.join("assets", "aquaassist_logo.png")
 REPORTS_PATH = os.path.join("data", "reports.csv")
 NOTIFY_PATH = os.path.join("data", "notifications.csv")
+OUTAGES_PATH = os.path.join("data", "outages.csv")
 ATTACHMENTS_DIR = "attachments"
+# NOTE ON SCHEMA CHANGE: "severity" is a new column (photo-based triage). If
+# you have an existing data/reports.csv from before this update, delete it
+# (or manually add a "severity" column to its header row) so the columns
+# line up — otherwise old and new rows will be misaligned.
 REPORTS_FIELDS = ["reference", "timestamp", "name", "phone", "location", "issue_type",
-                   "description", "attachment", "status"]
+                   "description", "attachment", "status", "severity"]
 NOTIFY_FIELDS = ["timestamp", "contact", "categories"]
+OUTAGE_FIELDS = ["id", "parish", "message", "start_date", "end_date", "created_at"]
 STATUS_STAGES = ["Received", "Assigned", "Crew Dispatched", "In Progress", "Resolved"]
+SEVERITY_LEVELS = ["Unknown", "Low", "Medium", "High"]
 
 st.set_page_config(
     page_title="AquaAssist",
@@ -197,6 +204,21 @@ UI_TEXT = {
         "map_not_installed": "Interactive map isn't installed on this server — add `folium` and `streamlit-folium` to requirements.txt to enable it. Enter your parish and address manually for now.",
         "map_pinned_caption": "Pinned location",
         "map_click_hint": "Click or drag the pin to set the exact spot.",
+        "severity_label": "Severity",
+        "severity_analyze_button": "Analyze severity from photo",
+        "outage_banner_prefix": "⚠️ Service notice for",
+        "your_parish_label": "Your parish (for outage alerts)",
+        "staff_map_label": "🗺️ Reports map",
+        "staff_map_empty": "No reports with a pinned location yet.",
+        "outage_section_label": "📢 Outage announcements",
+        "outage_parish_label": "Parish / Territory",
+        "outage_message_label": "Message to customers",
+        "outage_start_label": "Start date",
+        "outage_end_label": "End date",
+        "outage_create_button": "Post announcement",
+        "outage_active_label": "Active / upcoming announcements",
+        "outage_none": "No announcements posted.",
+        "outage_delete_button": "Remove",
     },
 }
 
@@ -767,6 +789,7 @@ Use the following facts to answer user questions:
 - If the issue is an emergency, advise the user to contact NAWASA immediately at (473) 440-2155.
 - NAWASA's official contact details: Phone (473) 440-2155, WhatsApp via https://wa.link/rt9dj1 (405-5245 / 459-6064 / 405-9143), Website https://nawasa.gd/. Share these when a customer asks how to reach NAWASA directly.
 - When a customer describes a specific problem (a leak, no water, low pressure, a billing issue) and gives at least a location, log it immediately using the log_water_report tool — do not tell the customer to fill out a separate form themselves. After logging it, tell the customer their reference number so they can track it, and let them know NAWASA staff will follow up. If you don't have their name or phone number yet, ask for it after logging so staff can reach them, but don't block logging the report on that.
+- If the customer attaches a photo or video of the issue, look at it before calling log_water_report and set the tool's severity argument based on what you actually see (e.g. a small drip is "Low", a steady leak is "Medium", a burst main or flooding is "High"). If there's no photo, leave severity as "Unknown" — never guess severity from text description alone.
 - The "Report a Leak" form, voice messages, and the WhatsApp button are alternative ways to reach NAWASA, but you should always try to log the report yourself first if the customer is describing it in chat.
 - Use natural understanding, not keyword matching — "I have no water", "my bill is wrong", "I smell chlorine", "my meter is leaking" should all be recognized as reportable issues even without exact keywords.
 
@@ -789,11 +812,14 @@ def ensure_files():
     if not os.path.exists(NOTIFY_PATH):
         with open(NOTIFY_PATH, "w", newline="", encoding="utf-8") as f:
             csv.DictWriter(f, fieldnames=NOTIFY_FIELDS).writeheader()
+    if not os.path.exists(OUTAGES_PATH):
+        with open(OUTAGES_PATH, "w", newline="", encoding="utf-8") as f:
+            csv.DictWriter(f, fieldnames=OUTAGE_FIELDS).writeheader()
 
 def new_reference():
     return "NW-" + uuid.uuid4().hex[:7].upper()
 
-def save_report(name, phone, location, issue_type, description, attachment_name=""):
+def save_report(name, phone, location, issue_type, description, attachment_name="", severity="Unknown"):
     ensure_files()
     reference = new_reference()
     with open(REPORTS_PATH, "a", newline="", encoding="utf-8") as f:
@@ -803,6 +829,7 @@ def save_report(name, phone, location, issue_type, description, attachment_name=
             "name": name, "phone": phone, "location": location,
             "issue_type": issue_type, "description": description,
             "attachment": attachment_name, "status": "Received",
+            "severity": severity,
         })
     return reference
 
@@ -830,11 +857,71 @@ def save_notification_signup(contact, categories):
             "contact": contact, "categories": ", ".join(categories),
         })
 
+def parse_report_coords(location_text):
+    """Pulls (lat, lng) out of a location string like '... (GPS: 12.11650,
+    -61.67900)', which is how both the map picker and the geolocation button
+    write coordinates into the location field. Returns None if not found."""
+    import re
+    if not isinstance(location_text, str):
+        return None
+    match = re.search(r"GPS:\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)", location_text)
+    if not match:
+        return None
+    try:
+        return float(match.group(1)), float(match.group(2))
+    except ValueError:
+        return None
+
+# ---------------------------------------------------------------------------
+# Outage announcements — staff creates these; the customer portal shows a
+# banner to anyone whose parish matches an announcement whose date range
+# covers today. This is an in-app "proactive" notice: it surfaces the next
+# time a customer opens (or already has open) the app, since actually
+# pushing a message to someone's phone/email requires wiring up an SMS or
+# email provider (e.g. Twilio, SendGrid) with its own API key, which isn't
+# configured here.
+# ---------------------------------------------------------------------------
+def save_outage(parish, message, start_date, end_date):
+    ensure_files()
+    outage_id = uuid.uuid4().hex[:8]
+    with open(OUTAGES_PATH, "a", newline="", encoding="utf-8") as f:
+        csv.DictWriter(f, fieldnames=OUTAGE_FIELDS).writerow({
+            "id": outage_id, "parish": parish, "message": message,
+            "start_date": start_date, "end_date": end_date,
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        })
+    return outage_id
+
+def load_outages():
+    ensure_files()
+    import pandas as pd
+    return pd.read_csv(OUTAGES_PATH)
+
+def delete_outage(outage_id):
+    import pandas as pd
+    df = load_outages()
+    df = df[df["id"] != outage_id]
+    df.to_csv(OUTAGES_PATH, index=False)
+
+def get_active_outages_for_parish(parish):
+    import pandas as pd
+    df = load_outages()
+    if df.empty:
+        return []
+    today = datetime.now().strftime("%Y-%m-%d")
+    matches = df[
+        (df["parish"] == parish)
+        & (df["start_date"].astype(str) <= today)
+        & (df["end_date"].astype(str) >= today)
+    ]
+    return matches.to_dict("records")
+
 # ---------------------------------------------------------------------------
 # Tool the AI can call directly during conversation to log a report
 # ---------------------------------------------------------------------------
 def log_water_report(location: str, issue_type: str, description: str,
-                      name: str = "Not provided", phone: str = "Not provided") -> str:
+                      name: str = "Not provided", phone: str = "Not provided",
+                      severity: str = "Unknown") -> str:
     """Logs a customer's water service issue into the NAWASA staff system so a
     technician can follow up on it. Call this as soon as the customer has
     described their problem and given at least a location — even in normal
@@ -846,11 +933,16 @@ def log_water_report(location: str, issue_type: str, description: str,
         description: A short description of the issue in the customer's own words.
         name: The customer's name, if given.
         phone: The customer's phone number, if given.
+        severity: One of "Unknown", "Low", "Medium", "High". If the customer
+            attached a photo of the issue, assess how serious it looks (e.g.
+            a small drip vs. a burst main flooding a street) and set this
+            accordingly; otherwise leave it "Unknown" rather than guessing
+            from text alone.
 
     Returns:
         A confirmation message including the reference number for tracking.
     """
-    reference = save_report(name, phone, location, issue_type, description)
+    reference = save_report(name, phone, location, issue_type, description, severity=severity)
     return f"Report logged successfully. Reference number: {reference}. A technician will follow up."
 
 # ---------------------------------------------------------------------------
@@ -1121,6 +1213,48 @@ if mode == "🔐 Staff Portal":
         st.info("No reports submitted yet.")
     else:
         st.metric("Total reports", len(reports_df))
+
+        # --- Incident map: every report with a pinned GPS location, color-coded by status ---
+        st.markdown(f'<div class="aqua-section-label">{t("staff_map_label")}</div>', unsafe_allow_html=True)
+        if HAS_MAP:
+            STATUS_COLORS = {
+                "Received": "red", "Assigned": "orange", "Crew Dispatched": "orange",
+                "In Progress": "blue", "Resolved": "green",
+            }
+            pinned_rows = []
+            for _, row in reports_df.iterrows():
+                coords = parse_report_coords(row.get("location", ""))
+                if coords:
+                    pinned_rows.append((row, coords))
+
+            if not pinned_rows:
+                st.caption(t("staff_map_empty"))
+            else:
+                avg_lat = sum(c[0] for _, c in pinned_rows) / len(pinned_rows)
+                avg_lng = sum(c[1] for _, c in pinned_rows) / len(pinned_rows)
+                incident_map = folium.Map(
+                    location=[avg_lat, avg_lng], zoom_start=11,
+                    tiles="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+                    attr="Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)",
+                )
+                for row, (lat, lng) in pinned_rows:
+                    status = row.get("status", "Received")
+                    severity = row.get("severity", "Unknown")
+                    popup = (f"<b>{row.get('reference', '')}</b><br>"
+                             f"{row.get('issue_type', '')} — {status}<br>"
+                             f"Severity: {severity}")
+                    folium.CircleMarker(
+                        location=[lat, lng], radius=8,
+                        color=STATUS_COLORS.get(status, "gray"),
+                        fill=True, fill_color=STATUS_COLORS.get(status, "gray"), fill_opacity=0.8,
+                        popup=folium.Popup(popup, max_width=220),
+                        tooltip=row.get("reference", ""),
+                    ).add_to(incident_map)
+                st_folium(incident_map, height=380, use_container_width=True, key="staff_incident_map")
+                st.caption("🔴 Received · 🟠 Assigned/Dispatched · 🔵 In Progress · 🟢 Resolved")
+        else:
+            st.caption(t("map_not_installed"))
+
         edited_df = st.data_editor(
             reports_df,
             use_container_width=True,
@@ -1147,6 +1281,40 @@ if mode == "🔐 Staff Portal":
                 st.dataframe(notif_df, use_container_width=True)
             else:
                 st.caption("No subscribers yet.")
+
+    # --- Outage announcements: staff posts these; matching customers see a
+    # banner in-app for their selected parish while the date range is active. ---
+    st.markdown(f'<div class="aqua-section-label">{t("outage_section_label")}</div>', unsafe_allow_html=True)
+    with st.form("outage_form", clear_on_submit=True):
+        outage_parish = st.selectbox(t("outage_parish_label"), GRENADA_PARISHES, key="outage_parish_select")
+        outage_message = st.text_area(t("outage_message_label"), key="outage_message_input")
+        outage_col1, outage_col2 = st.columns(2)
+        with outage_col1:
+            outage_start = st.date_input(t("outage_start_label"), key="outage_start_input")
+        with outage_col2:
+            outage_end = st.date_input(t("outage_end_label"), key="outage_end_input")
+        if st.form_submit_button(t("outage_create_button")):
+            if outage_message.strip():
+                save_outage(outage_parish, outage_message.strip(),
+                            outage_start.strftime("%Y-%m-%d"), outage_end.strftime("%Y-%m-%d"))
+                st.success("Announcement posted.")
+                st.rerun()
+            else:
+                st.error("Please enter a message.")
+
+    st.caption(t("outage_active_label"))
+    outages_df = load_outages()
+    if outages_df.empty:
+        st.caption(t("outage_none"))
+    else:
+        for _, row in outages_df.iterrows():
+            oc1, oc2 = st.columns([5, 1])
+            with oc1:
+                st.write(f"**{row['parish']}** ({row['start_date']} – {row['end_date']}): {row['message']}")
+            with oc2:
+                if st.button(t("outage_delete_button"), key=f"del_outage_{row['id']}"):
+                    delete_outage(row["id"])
+                    st.rerun()
 
     st.stop()
 
@@ -1187,6 +1355,11 @@ contact_row = f"""<div class="aqua-contact-row">
 </a>
 </div>"""
 st.markdown(contact_row, unsafe_allow_html=True)
+
+if st.session_state.get("customer_parish"):
+    for outage in get_active_outages_for_parish(st.session_state.customer_parish):
+        st.warning(f"{t('outage_banner_prefix')} {outage['parish']}: {outage['message']} "
+                   f"({outage['start_date']} – {outage['end_date']})")
 
 if not api_key:
     st.info("👈 Enter your Gemini API key in the sidebar (Account & language) to start chatting.")
@@ -1532,6 +1705,39 @@ with tab_report:
 
     st.markdown('<div class="aqua-card">', unsafe_allow_html=True)
     with st.expander(t("report_form_expander"), expanded=True):
+        # Photo upload lives OUTSIDE the form so the "Analyze severity" button
+        # can call Gemini vision and rerun immediately — widgets inside a
+        # st.form only take effect when the form itself is submitted.
+        r_attachment = st.file_uploader(t("field_attachment"),
+                                          type=["jpg", "jpeg", "png", "mp4", "mov", "pdf", "doc", "docx"],
+                                          key="report_attachment_uploader")
+        if "report_severity" not in st.session_state:
+            st.session_state.report_severity = "Unknown"
+
+        if r_attachment is not None and r_attachment.type and r_attachment.type.startswith("image/"):
+            if st.button(f"🔍 {t('severity_analyze_button')}", key="analyze_severity_btn"):
+                img_bytes = r_attachment.getvalue()
+                try:
+                    client = genai.Client(api_key=api_key)
+                    with st.spinner("Analyzing photo..."):
+                        vision_response = client.models.generate_content(
+                            model=MODEL_NAME,
+                            contents=[
+                                types.Part.from_bytes(data=img_bytes, mime_type=r_attachment.type),
+                                "This is a photo of a water utility issue (leak, burst pipe, "
+                                "damaged hydrant, etc.) reported by a NAWASA customer in Grenada. "
+                                "Reply with exactly one word describing the severity: Low, Medium, "
+                                "or High. Low = minor drip/no visible water loss. Medium = a steady "
+                                "leak or moderate water loss. High = a burst pipe, major flooding, "
+                                "or a safety hazard.",
+                            ],
+                        )
+                        guess = vision_response.text.strip().split()[0].capitalize()
+                    st.session_state.report_severity = guess if guess in SEVERITY_LEVELS else "Unknown"
+                except Exception:
+                    st.session_state.report_severity = "Unknown"
+                    st.warning("Couldn't analyze the photo right now — set severity manually below.")
+
         with st.form("leak_report_form", clear_on_submit=True):
             r_name = st.text_input(t("field_name"), value=st.session_state.customer_name)
             r_phone = st.text_input(t("field_phone"))
@@ -1544,8 +1750,10 @@ with tab_report:
             r_issue_type = st.selectbox(t("field_issue_type"), issue_type_values,
                                           format_func=lambda v: t(issue_type_keys[issue_type_values.index(v)]))
             r_description = st.text_area(t("field_description"))
-            r_attachment = st.file_uploader(t("field_attachment"),
-                                              type=["jpg", "jpeg", "png", "mp4", "mov", "pdf", "doc", "docx"])
+            r_severity = st.selectbox(
+                t("severity_label"), SEVERITY_LEVELS,
+                index=SEVERITY_LEVELS.index(st.session_state.report_severity),
+            )
             submitted = st.form_submit_button(t("submit_report"))
 
             if submitted:
@@ -1557,9 +1765,10 @@ with tab_report:
                         ensure_files()
                         attachment_name = f"{uuid.uuid4().hex[:8]}_{r_attachment.name}"
                         with open(os.path.join(ATTACHMENTS_DIR, attachment_name), "wb") as out:
-                            out.write(r_attachment.read())
+                            out.write(r_attachment.getvalue())
                     reference = save_report(r_name, r_phone, r_location, r_issue_type,
-                                             r_description, attachment_name)
+                                             r_description, attachment_name, severity=r_severity)
+                    st.session_state.report_severity = "Unknown"
                     st.success(f"✅ Report submitted! Your reference number is **{reference}** — save this to track your report below.")
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1621,6 +1830,14 @@ with tab_settings:
     st.session_state.high_contrast = st.toggle(t("high_contrast"), value=st.session_state.high_contrast)
     st.session_state.large_text = st.toggle(t("large_text"), value=st.session_state.large_text)
     st.caption(t("accessibility_note"))
+
+    parish_options = [""] + GRENADA_PARISHES
+    current_parish = st.session_state.get("customer_parish", "")
+    st.session_state.customer_parish = st.selectbox(
+        t("your_parish_label"), parish_options,
+        index=parish_options.index(current_parish) if current_parish in parish_options else 0,
+        key="settings_customer_parish",
+    )
 
     st.markdown('</div>', unsafe_allow_html=True)
 
