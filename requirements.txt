@@ -1,8 +1,21 @@
-streamlit
+# --- Core (required) ---
+streamlit>=1.38
 google-genai
 pandas
-gTTS
+
+# --- Optional: interactive Grenada map on the Report & Track tab ---
+# Without these, the app falls back to manual latitude/longitude entry.
+folium
+streamlit-folium
+
+# --- Optional: one-tap GPS location capture ---
+# Without this, location must be typed in manually.
+streamlit-geolocation
+
+# --- Optional: live in-browser mic recording for voice messages ---
+# Without this, voice notes can still be sent via file upload.
 audio-recorder-streamlit
 
-# Optional upgrade — not enabled by default:
-# streamlit-geolocation      # enables one-tap GPS location capture
+# --- Optional: text-to-speech for "speak replies aloud" ---
+# Without this, the voice-reply toggle stays disabled.
+gTTS
