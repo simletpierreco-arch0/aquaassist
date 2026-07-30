@@ -40,6 +40,16 @@ WHAT CHANGED IN THIS PASS (read before demoing):
   - RESTYLED: dropped the purple/pink reference palette entirely in favor of
     NAWASA's blue/white, with a soft animated wave pattern behind the whole
     app (not just the header) for a "watery" feel throughout.
+  - CHANGED: the UI chrome (buttons, labels, tabs) is no longer limited to 4
+    hand-translated languages. English is the only hand-written copy now;
+    every other language — including Grenadian Creole and anything in the
+    extended list (Japanese, Korean, etc.) or typed in freely — is
+    auto-translated by Gemini the first time it's selected and then cached
+    for the rest of the session, so the whole interface actually updates no
+    matter what language is chosen. This needs the Gemini API key to already
+    be entered; until then, the UI falls back to English. The AI's chat
+    replies already worked this way for any language — this brings the
+    surrounding UI text in line with that.
   - Everything else (FAQ search, report tracking, staff portal, settings,
     notifications) is unchanged in behavior from the previous build.
 """
@@ -142,9 +152,28 @@ EXTENDED_LANGUAGES = [
     "Thai", "Polish", "Greek", "Hebrew", "Romanian", "Czech", "Hungarian",
     "Indonesian", "Malay",
 ]
+# TTS voice codes gTTS understands, for languages where we know one. Anything
+# not listed here (including Grenadian Creole, and any language typed in
+# freely) falls back to an English voice reading the text phonetically.
+TTS_LANG_CODES = {
+    "English": "en", "Spanish": "es", "French": "fr",
+    "Portuguese": "pt", "German": "de", "Italian": "it", "Dutch": "nl",
+    "Chinese (Simplified)": "zh-CN", "Chinese (Traditional)": "zh-TW",
+    "Japanese": "ja", "Korean": "ko", "Hindi": "hi", "Arabic": "ar",
+    "Russian": "ru", "Turkish": "tr", "Swahili": "sw", "Bengali": "bn",
+    "Urdu": "ur", "Vietnamese": "vi", "Thai": "th", "Polish": "pl",
+    "Greek": "el", "Hebrew": "iw", "Romanian": "ro", "Czech": "cs",
+    "Hungarian": "hu", "Indonesian": "id", "Malay": "ms",
+}
 
-# UI text translations — fully covers the 4 pinned languages. Other languages
-# fall back to English UI chrome (see note at top of file).
+# UI text: English is the only hand-written copy — the single source of
+# truth for every button, label, and tab name. Every OTHER language,
+# including Grenadian Creole and anything from the extended list or typed
+# in freely (Japanese, Korean, or literally any language name), is
+# auto-translated by Gemini on first use and cached in session state, via
+# get_ui_dict()/translate_ui_text() below. This replaces the old approach of
+# hand-translating just 4 pinned languages and leaving everything else in
+# English.
 UI_TEXT = {
     "English": {
         "welcome": "Welcome to AquaAssist! 💧 I'm here to help with your NAWASA water services.",
@@ -184,125 +213,76 @@ UI_TEXT = {
         "login_lang": "Choose your language", "login_start": "Start chatting",
         "login_missing": "Please select a language and enter your API key first.",
     },
-    "Grenadian Creole": {
-        "welcome": "Welcome to AquaAssist! 💧 Ah deh fu help yuh wit yuh NAWASA watah service dem.",
-        "tab_chat": "💬 Chat", "tab_faq": "❓ FAQ", "tab_report": "📋 Report & Track",
-        "tab_history": "🕘 History", "tab_settings": "⚙️ Settings",
-        "report_issue": "🚿 Report an issue",
-        "quick_actions": "💧 Quick actions", "ask_placeholder": "Aks AquaAssist sumting...",
-        "your_name": "Yuh name", "continue": "Continue",
-        "call_us": "Call We", "whatsapp_label": "WhatsApp", "chat_now": "Chat now",
-        "website_label": "Website",
-        "qa_report_label": "🚿 Report a Leak", "qa_report_prompt": "Ah want fu report a watah leak.",
-        "qa_maint_label": "🛠️ Maintenance", "qa_maint_prompt": "It got any outage or maintenance planned fu meh area?",
-        "qa_bill_label": "💳 Pay My Bill", "qa_bill_prompt": "How ah could pay meh NAWASA bill?",
-        "qa_rep_label": "📞 Talk to a Rep", "qa_rep_prompt": "Ah want fu talk to a customer service representative.",
-        "settings_preferences": "⚙️ Preferences", "preferred_language": "Language yuh prefer",
-        "dark_mode": "🌙 Dark mode", "high_contrast": "🔲 High contrast mode", "large_text": "🔠 Bigger letters",
-        "accessibility_note": "Accessibility: dis app support keyboard navigation and screen readers.",
-        "settings_conversation": "💬 Chat",
-        "conversation_note": "message dem in dis session. Go to the History tab fu search or clear yuh chat.",
-        "field_name": "Yuh name", "field_phone": "Phone numbah",
-        "field_location": "Location / address wey de issue deh", "field_description": "Describe de issue",
-        "field_issue_type": "Kine ah issue", "field_attachment": "Attach a photo, video, or document (optional)",
-        "submit_report": "Send de report", "report_form_expander": "Fill out a report — it does go straight to NAWASA staff",
-        "track_report_label": "📍 Track a report", "track_report_placeholder": "Put in yuh reference numbah (e.g. NW-A1B2C3D)",
-        "get_notified": "🔔 Get notify", "notify_contact_label": "Email or phone numbah",
-        "notify_categories_label": "Notify me bout", "subscribe_button": "Subscribe",
-        "voice_toggle_label": "🔊 Speak reply dem out loud", "voice_popover_label": "🎤",
-        "voice_help_on": "Uses gTTS fu read de bot reply dem out loud.", "voice_help_off": "Install gTTS fu enable dis.",
-        "issue_leak": "Leak", "issue_no_water": "No watah supply", "issue_low_pressure": "Low pressure",
-        "issue_billing": "Billing issue", "issue_burst": "Burst main", "issue_hydrant": "Damaged hydrant",
-        "issue_quality": "Watah quality concern", "issue_other": "Other",
-        "new_chat": "＋ New chat", "chat_history": "Recent chats", "no_history": "No previous chats yet.",
-        "login_title": "Welcome to AquaAssist", "login_subtitle": "Yuh smart watah support assistant",
-        "login_choose": "How yuh want fu continue?", "login_guest": "Continue as Guest",
-        "login_account": "Log in wit an account", "login_name": "Name", "login_email": "Email",
-        "login_key": "Gemini API key", "login_key_help": "Get a key at https://aistudio.google.com/",
-        "login_lang": "Choose yuh language", "login_start": "Start chatting",
-        "login_missing": "Please select a language and put in yuh API key first.",
-    },
-    "Spanish": {
-        "welcome": "¡Bienvenido a AquaAssist! 💧 Estoy aquí para ayudarte con los servicios de agua de NAWASA.",
-        "tab_chat": "💬 Chat", "tab_faq": "❓ Preguntas", "tab_report": "📋 Reportar y Rastrear",
-        "tab_history": "🕘 Historial", "tab_settings": "⚙️ Ajustes",
-        "report_issue": "🚿 Reportar un problema",
-        "quick_actions": "💧 Acciones rápidas", "ask_placeholder": "Pregúntale algo a AquaAssist...",
-        "your_name": "Tu nombre", "continue": "Continuar",
-        "call_us": "Llámanos", "whatsapp_label": "WhatsApp", "chat_now": "Chatea ahora",
-        "website_label": "Sitio web",
-        "qa_report_label": "🚿 Reportar una Fuga", "qa_report_prompt": "Quisiera reportar una fuga de agua.",
-        "qa_maint_label": "🛠️ Mantenimiento", "qa_maint_prompt": "¿Hay cortes o mantenimiento programado en mi área?",
-        "qa_bill_label": "💳 Pagar mi Factura", "qa_bill_prompt": "¿Cuáles son mis opciones para pagar mi factura de NAWASA?",
-        "qa_rep_label": "📞 Hablar con un Agente", "qa_rep_prompt": "Quisiera hablar con un representante de servicio al cliente.",
-        "settings_preferences": "⚙️ Preferencias", "preferred_language": "Idioma preferido",
-        "dark_mode": "🌙 Modo oscuro", "high_contrast": "🔲 Modo de alto contraste", "large_text": "🔠 Texto más grande",
-        "accessibility_note": "Accesibilidad: esta app admite navegación por teclado y lectores de pantalla de forma nativa.",
-        "settings_conversation": "💬 Conversación",
-        "conversation_note": "mensajes en esta sesión. Ve a la pestaña Historial para buscar o borrar tu conversación.",
-        "field_name": "Tu nombre", "field_phone": "Número de teléfono",
-        "field_location": "Ubicación / dirección del problema", "field_description": "Describe el problema",
-        "field_issue_type": "Tipo de problema", "field_attachment": "Adjunta una foto, video o documento (opcional)",
-        "submit_report": "Enviar reporte", "report_form_expander": "Completa un reporte — va directo al personal de NAWASA",
-        "track_report_label": "📍 Rastrear un reporte", "track_report_placeholder": "Ingresa tu número de referencia (ej. NW-A1B2C3D)",
-        "get_notified": "🔔 Recibir notificaciones", "notify_contact_label": "Correo o número de teléfono",
-        "notify_categories_label": "Notificarme sobre", "subscribe_button": "Suscribirse",
-        "voice_toggle_label": "🔊 Escuchar las respuestas en voz alta", "voice_popover_label": "🎤",
-        "voice_help_on": "Usa gTTS para leer las respuestas del bot en voz alta.", "voice_help_off": "Instala gTTS para habilitar esto.",
-        "issue_leak": "Fuga", "issue_no_water": "Sin suministro de agua", "issue_low_pressure": "Baja presión",
-        "issue_billing": "Problema de facturación", "issue_burst": "Rotura de tubería principal", "issue_hydrant": "Hidrante dañado",
-        "issue_quality": "Problema de calidad del agua", "issue_other": "Otro",
-        "new_chat": "＋ Nuevo chat", "chat_history": "Chats recientes", "no_history": "Aún no hay chats anteriores.",
-        "login_title": "Bienvenido a AquaAssist", "login_subtitle": "Tu asistente inteligente de soporte de agua",
-        "login_choose": "¿Cómo deseas continuar?", "login_guest": "Continuar como invitado",
-        "login_account": "Iniciar sesión con una cuenta", "login_name": "Nombre", "login_email": "Correo electrónico",
-        "login_key": "Clave API de Gemini", "login_key_help": "Obtén una clave en https://aistudio.google.com/",
-        "login_lang": "Elige tu idioma", "login_start": "Comenzar a chatear",
-        "login_missing": "Selecciona un idioma e ingresa tu clave API primero.",
-    },
-    "French": {
-        "welcome": "Bienvenue chez AquaAssist! 💧 Je suis là pour vous aider avec les services d'eau de la NAWASA.",
-        "tab_chat": "💬 Discussion", "tab_faq": "❓ FAQ", "tab_report": "📋 Signaler et Suivre",
-        "tab_history": "🕘 Historique", "tab_settings": "⚙️ Paramètres",
-        "report_issue": "🚿 Signaler un problème",
-        "quick_actions": "💧 Actions rapides", "ask_placeholder": "Demandez quelque chose à AquaAssist...",
-        "your_name": "Votre nom", "continue": "Continuer",
-        "call_us": "Appelez-nous", "whatsapp_label": "WhatsApp", "chat_now": "Discuter maintenant",
-        "website_label": "Site web",
-        "qa_report_label": "🚿 Signaler une Fuite", "qa_report_prompt": "Je voudrais signaler une fuite d'eau.",
-        "qa_maint_label": "🛠️ Entretien", "qa_maint_prompt": "Y a-t-il des coupures ou un entretien prévu dans ma région?",
-        "qa_bill_label": "💳 Payer ma Facture", "qa_bill_prompt": "Quelles sont mes options pour payer ma facture NAWASA?",
-        "qa_rep_label": "📞 Parler à un Agent", "qa_rep_prompt": "Je voudrais parler à un représentant du service client.",
-        "settings_preferences": "⚙️ Préférences", "preferred_language": "Langue préférée",
-        "dark_mode": "🌙 Mode sombre", "high_contrast": "🔲 Mode contraste élevé", "large_text": "🔠 Texte plus grand",
-        "accessibility_note": "Accessibilité: cette application prend en charge la navigation au clavier et les lecteurs d'écran nativement.",
-        "settings_conversation": "💬 Conversation",
-        "conversation_note": "messages dans cette session. Allez à l'onglet Historique pour rechercher ou effacer votre conversation.",
-        "field_name": "Votre nom", "field_phone": "Numéro de téléphone",
-        "field_location": "Emplacement / adresse du problème", "field_description": "Décrivez le problème",
-        "field_issue_type": "Type de problème", "field_attachment": "Joindre une photo, vidéo ou document (facultatif)",
-        "submit_report": "Envoyer le signalement", "report_form_expander": "Remplissez un signalement — il va directement au personnel de la NAWASA",
-        "track_report_label": "📍 Suivre un signalement", "track_report_placeholder": "Entrez votre numéro de référence (ex. NW-A1B2C3D)",
-        "get_notified": "🔔 Recevoir des notifications", "notify_contact_label": "E-mail ou numéro de téléphone",
-        "notify_categories_label": "Me notifier à propos de", "subscribe_button": "S'abonner",
-        "voice_toggle_label": "🔊 Lire les réponses à voix haute", "voice_popover_label": "🎤",
-        "voice_help_on": "Utilise gTTS pour lire les réponses du bot à voix haute.", "voice_help_off": "Installez gTTS pour activer ceci.",
-        "issue_leak": "Fuite", "issue_no_water": "Pas d'eau", "issue_low_pressure": "Faible pression",
-        "issue_billing": "Problème de facturation", "issue_burst": "Canalisation principale rompue", "issue_hydrant": "Borne d'incendie endommagée",
-        "issue_quality": "Problème de qualité de l'eau", "issue_other": "Autre",
-        "new_chat": "＋ Nouvelle discussion", "chat_history": "Discussions récentes", "no_history": "Pas encore de discussions précédentes.",
-        "login_title": "Bienvenue chez AquaAssist", "login_subtitle": "Votre assistant intelligent de support de l'eau",
-        "login_choose": "Comment souhaitez-vous continuer ?", "login_guest": "Continuer en tant qu'invité",
-        "login_account": "Se connecter avec un compte", "login_name": "Nom", "login_email": "E-mail",
-        "login_key": "Clé API Gemini", "login_key_help": "Obtenez une clé sur https://aistudio.google.com/",
-        "login_lang": "Choisissez votre langue", "login_start": "Commencer à discuter",
-        "login_missing": "Veuillez d'abord choisir une langue et saisir votre clé API.",
-    },
 }
+
+def translate_ui_text(language, client):
+    """Translates every English UI_TEXT value into `language` in a single
+    Gemini call, preserving emoji/URLs/placeholders and JSON structure.
+    Returns the translated dict, or None on any failure."""
+    import json
+    try:
+        source = UI_TEXT["English"]
+        prompt = (
+            f"Translate the values of this JSON object into {language}. This is the interface text "
+            f"for a water utility customer-support app. Keep the exact same JSON keys and the exact "
+            f"same number of entries — do not add, remove, merge, or rename keys. Preserve emoji, "
+            f"punctuation symbols, URLs, and the example reference code 'NW-A1B2C3D' exactly as-is — "
+            f"only translate the human-readable words. Keep the proper nouns 'NAWASA' and 'AquaAssist' "
+            f"untranslated. Respond with ONLY the translated JSON object, nothing else, no commentary, "
+            f"no markdown code fences:\n\n{json.dumps(source, ensure_ascii=False)}"
+        )
+        response = client.models.generate_content(model=MODEL_NAME, contents=prompt)
+        raw = response.text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        translated = json.loads(raw)
+        if isinstance(translated, dict) and set(translated.keys()) == set(source.keys()):
+            return translated
+    except Exception:
+        pass
+    return None
+
+def get_ui_dict(language):
+    """Returns the UI_TEXT dict for `language`, auto-translating and caching
+    it via Gemini the first time that language is used this session. Falls
+    back to English if there's no API key yet or translation fails — this
+    fallback resolves itself automatically once a key is entered, since a
+    fresh attempt is made (per language+key pair) on the next render."""
+    if not language or language == "English":
+        return UI_TEXT["English"]
+
+    cache = st.session_state.setdefault("ui_translations", {})
+    if language in cache:
+        return cache[language]
+
+    api_key = st.session_state.get("api_key")
+    if not api_key:
+        return UI_TEXT["English"]
+
+    # Avoid re-attempting a failed translation on every rerun with the same
+    # (language, key) pair — e.g. while the API key is still being typed.
+    attempted = st.session_state.setdefault("ui_translation_attempted", {})
+    if attempted.get(language) == api_key:
+        return UI_TEXT["English"]
+    attempted[language] = api_key
+
+    try:
+        client = genai.Client(api_key=api_key)
+        with st.spinner(f"Translating the interface into {language}..."):
+            translated = translate_ui_text(language, client)
+        if translated:
+            cache[language] = translated
+            return translated
+    except Exception:
+        pass
+    return UI_TEXT["English"]
 
 def t(key):
     lang = st.session_state.get("selected_language") or "English"
-    return UI_TEXT.get(lang, UI_TEXT["English"]).get(key, UI_TEXT["English"].get(key, key))
+    d = get_ui_dict(lang)
+    return d.get(key, UI_TEXT["English"].get(key, key))
 
 # ---------------------------------------------------------------------------
 # Official NAWASA FAQs (pulled from nawasa.gd/nawasa-faqs, customer-facing subset)
@@ -884,8 +864,6 @@ def speak_text(text, lang_code="en"):
     except Exception:
         return None
 
-TTS_LANG_CODES = {"English": "en", "Spanish": "es", "French": "fr", "Grenadian Creole": "en"}
-
 # ---------------------------------------------------------------------------
 # Chat session helpers (multi-chat history, like a typical AI chat app)
 # ---------------------------------------------------------------------------
@@ -946,6 +924,15 @@ if not st.session_state.auth_done:
                               if st.session_state.selected_language in EXTENDED_LANGUAGES else 0)
         if extra:
             st.session_state.selected_language = extra
+        st.caption("Don't see your language? Type any language or dialect below.")
+        custom_lang = st.text_input("Any other language", key="login_custom_lang",
+                                     placeholder="e.g. Haitian Creole, Tagalog, Igbo...")
+        if custom_lang.strip() and st.button(f"Use “{custom_lang.strip()}”", key="login_custom_lang_btn"):
+            st.session_state.selected_language = custom_lang.strip()
+            st.rerun()
+
+    if st.session_state.selected_language:
+        st.caption(f"Selected: **{st.session_state.selected_language}**")
 
     st.divider()
 
@@ -1033,15 +1020,20 @@ with st.sidebar:
     st.caption(f"👤 {'Guest' if st.session_state.account_mode == 'guest' else (st.session_state.customer_name or 'Account')}")
 
     with st.expander("⚙️ Account & language"):
+        lang_options = PRIMARY_LANGUAGES + EXTENDED_LANGUAGES
+        current_in_list = st.session_state.selected_language in lang_options
         new_lang = st.selectbox(
-            t("preferred_language") if "preferred_language" in UI_TEXT["English"] else "Language",
-            PRIMARY_LANGUAGES + EXTENDED_LANGUAGES,
-            index=(PRIMARY_LANGUAGES + EXTENDED_LANGUAGES).index(st.session_state.selected_language)
-            if st.session_state.selected_language in PRIMARY_LANGUAGES + EXTENDED_LANGUAGES else 0,
+            t("preferred_language"),
+            lang_options + ([st.session_state.selected_language] if not current_in_list else []),
+            index=lang_options.index(st.session_state.selected_language) if current_in_list
+            else len(lang_options),
             key="sidebar_lang_select",
         )
-        if new_lang != st.session_state.selected_language:
-            st.session_state.selected_language = new_lang
+        custom_lang = st.text_input("Or type any other language", key="sidebar_custom_lang",
+                                     placeholder="e.g. Haitian Creole, Tagalog, Igbo...")
+        target_lang = custom_lang.strip() if custom_lang.strip() else new_lang
+        if target_lang != st.session_state.selected_language:
+            st.session_state.selected_language = target_lang
             st.session_state.pop("chat", None)
             st.rerun()
 
@@ -1543,12 +1535,21 @@ with tab_settings:
     st.markdown(f'<div class="aqua-section-label">{t("settings_preferences")}</div>', unsafe_allow_html=True)
     st.markdown('<div class="aqua-card">', unsafe_allow_html=True)
 
-    new_lang = st.selectbox(t("preferred_language"), PRIMARY_LANGUAGES + EXTENDED_LANGUAGES,
-                              index=(PRIMARY_LANGUAGES + EXTENDED_LANGUAGES).index(st.session_state.selected_language)
-                              if st.session_state.selected_language in PRIMARY_LANGUAGES + EXTENDED_LANGUAGES else 0,
-                              key="settings_lang_select")
-    if new_lang != st.session_state.selected_language:
-        st.session_state.selected_language = new_lang
+    lang_options = PRIMARY_LANGUAGES + EXTENDED_LANGUAGES
+    current_in_list = st.session_state.selected_language in lang_options
+    new_lang = st.selectbox(
+        t("preferred_language"),
+        lang_options + ([st.session_state.selected_language] if not current_in_list else []),
+        index=lang_options.index(st.session_state.selected_language) if current_in_list
+        else len(lang_options),
+        key="settings_lang_select",
+    )
+    custom_lang = st.text_input("Or type any other language", key="settings_custom_lang",
+                                 placeholder="e.g. Haitian Creole, Tagalog, Igbo...")
+    target_lang = custom_lang.strip() if custom_lang.strip() else new_lang
+    if target_lang != st.session_state.selected_language:
+        st.session_state.selected_language = target_lang
+        st.session_state.pop("chat", None)
         st.rerun()
 
     st.session_state.dark_mode = st.toggle(t("dark_mode"), value=st.session_state.dark_mode)
