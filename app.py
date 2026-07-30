@@ -1,5 +1,5 @@
 """
-AquaAssist — Streamlit UI (Major upgrade)
+AquaAssist — Streamlit UI (Redesign: login gate, blue/white wave theme, multi-chat history)
 NAWASA (National Water and Sewerage Authority, Grenada) AI customer support platform.
 
 Run with:
@@ -12,39 +12,36 @@ Folder layout expected:
     .streamlit/config.toml
     data/reports.csv          (auto-created)
     data/notifications.csv    (auto-created)
-    attachments/              (auto-created, uploaded report files)
+    attachments/              (auto-created, uploaded report files + chat attachments)
 
 BEFORE DEPLOYING:
     STAFF_PASSCODE -> replace "changeme123" below, or set as env var / Streamlit secret
 
-WHAT'S FULLY WORKING vs SIMPLIFIED (read this before demoing to a client):
-  - Language selector, FAQ search, report tracking with reference numbers,
-    file uploads on reports, settings (dark mode/high contrast/large text),
-    notifications signup, AI-driven report logging: all fully working.
-  - Voice OUTPUT: uses gTTS (Google Text-to-Speech) to generate real spoken
-    audio of the bot's replies — fully working, needs internet at runtime.
-  - Voice INPUT: Streamlit has no native microphone/live-recording support.
-    This build lets customers UPLOAD a voice note (recorded in their phone's
-    voice memo app) which Gemini transcribes and understands directly. For
-    true in-browser one-tap mic recording, install the optional package
-    `audio-recorder-streamlit` — the code below auto-detects it and upgrades
-    to live recording if present, with the upload fallback if not.
-  - GPS location: same story — no native browser GPS permission prompt in
-    Streamlit. Customers type/select their location manually by default.
-    If you install the optional package `streamlit-geolocation`, this code
-    auto-detects it and offers a one-tap "use my location" button.
-  - Conversation memory / history: kept for the current browser session only
-    (name, language, past messages). True persistent memory across visits/
-    devices needs user accounts + a database — out of scope for this build,
-    flagged here so expectations are accurate.
-  - UI translation: the AI's chat REPLIES adapt to whatever language the
-    customer types in (this uses Gemini's own multilingual ability, works
-    for effectively any language/dialect). The UI CHROME (buttons, labels)
-    is fully translated for the 4 pinned languages (English, Grenadian
-    Creole, Spanish, French). Additional languages in the picker change
-    which language the AI replies in, but interface labels stay in English
-    until translated — hand-translating 25+ languages of UI strings without
-    a native speaker to verify them risks shipping wrong/awkward text.
+WHAT CHANGED IN THIS PASS (read before demoing):
+  - NEW: single Welcome/Login screen. Customer picks "Continue as Guest" or
+    "Log in with an account", picks their language, and enters their Gemini
+    API key — all in one place, over a blue/white "watery wave" background.
+    There is no real user database behind "Log in with an account" (this
+    build has no backend auth system) — it simply captures a name + email
+    so the session is labelled as an account session instead of a guest
+    session. Wiring this to real authentication is future work.
+  - NEW: multiple chat sessions with history, like a typical AI chat app.
+    A "+ New chat" button in the sidebar saves the current conversation
+    under an auto-generated name (taken from the customer's first message)
+    and starts a fresh one. Past chats are listed and clickable to reload.
+    Note: reopening an old chat restores what was said, but continuing it
+    reseeds a fresh Gemini session from that transcript rather than a true
+    resumed server-side session — there can occasionally be small continuity
+    differences right after switching back to an old chat.
+  - MOVED: voice messages and file attachments are no longer a separate
+    "Quick actions" row — they now live directly beside the chat text box,
+    as a paperclip (attach) control built into Streamlit's chat input and a
+    compact mic button right next to it, so it reads as one input bar.
+  - RESTYLED: dropped the purple/pink reference palette entirely in favor of
+    NAWASA's blue/white, with a soft animated wave pattern behind the whole
+    app (not just the header) for a "watery" feel throughout.
+  - Everything else (FAQ search, report tracking, staff portal, settings,
+    notifications) is unchanged in behavior from the previous build.
 """
 
 import os
@@ -108,17 +105,31 @@ st.set_page_config(
 # Session defaults
 # ---------------------------------------------------------------------------
 defaults = {
+    "auth_done": False,            # True once the customer clicks Guest or Log in
+    "account_mode": None,          # "guest" or "account"
     "selected_language": None,
     "customer_name": "",
+    "customer_email": "",
+    "api_key": os.environ.get("GEMINI_API_KEY", ""),
     "dark_mode": False,
     "high_contrast": False,
     "large_text": False,
     "voice_replies": False,
-    "messages": [],
+    "chat_sessions": {},           # id -> {"name": str, "messages": [...]}
+    "current_session_id": None,
 }
 for key, val in defaults.items():
     if key not in st.session_state:
         st.session_state[key] = val
+
+if not st.session_state.current_session_id:
+    _sid = str(uuid.uuid4())
+    st.session_state.chat_sessions[_sid] = {"name": "New chat", "messages": []}
+    st.session_state.current_session_id = _sid
+
+# Convenience alias — `messages` is the SAME list object stored inside
+# chat_sessions[current_session_id], so appending here also updates history.
+st.session_state.messages = st.session_state.chat_sessions[st.session_state.current_session_id]["messages"]
 
 # ---------------------------------------------------------------------------
 # Languages
@@ -160,11 +171,18 @@ UI_TEXT = {
         "track_report_label": "📍 Track a report", "track_report_placeholder": "Enter your reference number (e.g. NW-A1B2C3D)",
         "get_notified": "🔔 Get notified", "notify_contact_label": "Email or phone number",
         "notify_categories_label": "Notify me about", "subscribe_button": "Subscribe",
-        "voice_toggle_label": "🔊 Speak replies aloud", "voice_popover_label": "🎤 Send a voice message",
+        "voice_toggle_label": "🔊 Speak replies aloud", "voice_popover_label": "🎤",
         "voice_help_on": "Uses gTTS to read the bot's replies aloud.", "voice_help_off": "Install gTTS to enable this.",
         "issue_leak": "Leak", "issue_no_water": "No water supply", "issue_low_pressure": "Low pressure",
         "issue_billing": "Billing issue", "issue_burst": "Burst main", "issue_hydrant": "Damaged hydrant",
         "issue_quality": "Water quality concern", "issue_other": "Other",
+        "new_chat": "＋ New chat", "chat_history": "Recent chats", "no_history": "No previous chats yet.",
+        "login_title": "Welcome to AquaAssist", "login_subtitle": "Your smart water support assistant",
+        "login_choose": "How would you like to continue?", "login_guest": "Continue as Guest",
+        "login_account": "Log in with an account", "login_name": "Name", "login_email": "Email",
+        "login_key": "Gemini API key", "login_key_help": "Get a key at https://aistudio.google.com/",
+        "login_lang": "Choose your language", "login_start": "Start chatting",
+        "login_missing": "Please select a language and enter your API key first.",
     },
     "Grenadian Creole": {
         "welcome": "Welcome to AquaAssist! 💧 Ah deh fu help yuh wit yuh NAWASA watah service dem.",
@@ -191,11 +209,18 @@ UI_TEXT = {
         "track_report_label": "📍 Track a report", "track_report_placeholder": "Put in yuh reference numbah (e.g. NW-A1B2C3D)",
         "get_notified": "🔔 Get notify", "notify_contact_label": "Email or phone numbah",
         "notify_categories_label": "Notify me bout", "subscribe_button": "Subscribe",
-        "voice_toggle_label": "🔊 Speak reply dem out loud", "voice_popover_label": "🎤 Send a voice message",
+        "voice_toggle_label": "🔊 Speak reply dem out loud", "voice_popover_label": "🎤",
         "voice_help_on": "Uses gTTS fu read de bot reply dem out loud.", "voice_help_off": "Install gTTS fu enable dis.",
         "issue_leak": "Leak", "issue_no_water": "No watah supply", "issue_low_pressure": "Low pressure",
         "issue_billing": "Billing issue", "issue_burst": "Burst main", "issue_hydrant": "Damaged hydrant",
         "issue_quality": "Watah quality concern", "issue_other": "Other",
+        "new_chat": "＋ New chat", "chat_history": "Recent chats", "no_history": "No previous chats yet.",
+        "login_title": "Welcome to AquaAssist", "login_subtitle": "Yuh smart watah support assistant",
+        "login_choose": "How yuh want fu continue?", "login_guest": "Continue as Guest",
+        "login_account": "Log in wit an account", "login_name": "Name", "login_email": "Email",
+        "login_key": "Gemini API key", "login_key_help": "Get a key at https://aistudio.google.com/",
+        "login_lang": "Choose yuh language", "login_start": "Start chatting",
+        "login_missing": "Please select a language and put in yuh API key first.",
     },
     "Spanish": {
         "welcome": "¡Bienvenido a AquaAssist! 💧 Estoy aquí para ayudarte con los servicios de agua de NAWASA.",
@@ -222,11 +247,18 @@ UI_TEXT = {
         "track_report_label": "📍 Rastrear un reporte", "track_report_placeholder": "Ingresa tu número de referencia (ej. NW-A1B2C3D)",
         "get_notified": "🔔 Recibir notificaciones", "notify_contact_label": "Correo o número de teléfono",
         "notify_categories_label": "Notificarme sobre", "subscribe_button": "Suscribirse",
-        "voice_toggle_label": "🔊 Escuchar las respuestas en voz alta", "voice_popover_label": "🎤 Enviar un mensaje de voz",
+        "voice_toggle_label": "🔊 Escuchar las respuestas en voz alta", "voice_popover_label": "🎤",
         "voice_help_on": "Usa gTTS para leer las respuestas del bot en voz alta.", "voice_help_off": "Instala gTTS para habilitar esto.",
         "issue_leak": "Fuga", "issue_no_water": "Sin suministro de agua", "issue_low_pressure": "Baja presión",
         "issue_billing": "Problema de facturación", "issue_burst": "Rotura de tubería principal", "issue_hydrant": "Hidrante dañado",
         "issue_quality": "Problema de calidad del agua", "issue_other": "Otro",
+        "new_chat": "＋ Nuevo chat", "chat_history": "Chats recientes", "no_history": "Aún no hay chats anteriores.",
+        "login_title": "Bienvenido a AquaAssist", "login_subtitle": "Tu asistente inteligente de soporte de agua",
+        "login_choose": "¿Cómo deseas continuar?", "login_guest": "Continuar como invitado",
+        "login_account": "Iniciar sesión con una cuenta", "login_name": "Nombre", "login_email": "Correo electrónico",
+        "login_key": "Clave API de Gemini", "login_key_help": "Obtén una clave en https://aistudio.google.com/",
+        "login_lang": "Elige tu idioma", "login_start": "Comenzar a chatear",
+        "login_missing": "Selecciona un idioma e ingresa tu clave API primero.",
     },
     "French": {
         "welcome": "Bienvenue chez AquaAssist! 💧 Je suis là pour vous aider avec les services d'eau de la NAWASA.",
@@ -253,11 +285,18 @@ UI_TEXT = {
         "track_report_label": "📍 Suivre un signalement", "track_report_placeholder": "Entrez votre numéro de référence (ex. NW-A1B2C3D)",
         "get_notified": "🔔 Recevoir des notifications", "notify_contact_label": "E-mail ou numéro de téléphone",
         "notify_categories_label": "Me notifier à propos de", "subscribe_button": "S'abonner",
-        "voice_toggle_label": "🔊 Lire les réponses à voix haute", "voice_popover_label": "🎤 Envoyer un message vocal",
+        "voice_toggle_label": "🔊 Lire les réponses à voix haute", "voice_popover_label": "🎤",
         "voice_help_on": "Utilise gTTS pour lire les réponses du bot à voix haute.", "voice_help_off": "Installez gTTS pour activer ceci.",
         "issue_leak": "Fuite", "issue_no_water": "Pas d'eau", "issue_low_pressure": "Faible pression",
         "issue_billing": "Problème de facturation", "issue_burst": "Canalisation principale rompue", "issue_hydrant": "Borne d'incendie endommagée",
         "issue_quality": "Problème de qualité de l'eau", "issue_other": "Autre",
+        "new_chat": "＋ Nouvelle discussion", "chat_history": "Discussions récentes", "no_history": "Pas encore de discussions précédentes.",
+        "login_title": "Bienvenue chez AquaAssist", "login_subtitle": "Votre assistant intelligent de support de l'eau",
+        "login_choose": "Comment souhaitez-vous continuer ?", "login_guest": "Continuer en tant qu'invité",
+        "login_account": "Se connecter avec un compte", "login_name": "Nom", "login_email": "E-mail",
+        "login_key": "Clé API Gemini", "login_key_help": "Obtenez une clé sur https://aistudio.google.com/",
+        "login_lang": "Choisissez votre langue", "login_start": "Commencer à discuter",
+        "login_missing": "Veuillez d'abord choisir une langue et saisir votre clé API.",
     },
 }
 
@@ -341,7 +380,8 @@ def get_translated_faqs(language, client):
     return FAQS  # fall back silently to English if translation fails
 
 # ---------------------------------------------------------------------------
-# Brand palette — swaps for dark mode / high contrast
+# Brand palette — blue & white only, with dark mode / high contrast swaps.
+# (Purple/pink reference design intentionally NOT used — NAWASA blue instead.)
 # ---------------------------------------------------------------------------
 if st.session_state.high_contrast:
     BRAND_BLUE = "#004C99"
@@ -354,15 +394,15 @@ elif st.session_state.dark_mode:
     BRAND_BLUE = "#3B9EE8"
     BRAND_BLUE_LIGHT = "#5FB4F0"
     BRAND_BLUE_DARK = "#E8F0FA"
-    BRAND_CREAM = "#12181F"
-    BRAND_CREAM_SOFT = "#1C2530"
-    BRAND_WHITE = "#1C2530"
+    BRAND_CREAM = "#0E141B"
+    BRAND_CREAM_SOFT = "#182230"
+    BRAND_WHITE = "#182230"
 else:
     BRAND_BLUE = "#0B76C7"
     BRAND_BLUE_LIGHT = "#4FA8E0"
     BRAND_BLUE_DARK = "#0B2545"
-    BRAND_CREAM = "#FDF9F0"
-    BRAND_CREAM_SOFT = "#F5EEDC"
+    BRAND_CREAM = "#F4F9FE"
+    BRAND_CREAM_SOFT = "#E7F2FC"
     BRAND_WHITE = "#FFFFFF"
 
 WHATSAPP_GREEN = "#25D366"
@@ -372,6 +412,17 @@ logo_b64 = ""
 if os.path.exists(LOGO_PATH):
     with open(LOGO_PATH, "rb") as f:
         logo_b64 = base64.b64encode(f.read()).decode()
+
+# A soft repeating wave pattern used as a fixed backdrop behind the whole app.
+_WAVE_BG_SVG = (
+    "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20"
+    "viewBox='0%200%201200%20200'%20preserveAspectRatio='none'%3E"
+    "%3Cpath%20d='M0,80%20C200,140%20400,20%20600,80%20C800,140%201000,20%201200,80%20L1200,200%20L0,200%20Z'%20"
+    f"fill='{BRAND_BLUE.replace('#', '%23')}'%20fill-opacity='0.06'/%3E"
+    "%3Cpath%20d='M0,120%20C220,60%20420,180%20620,120%20C820,60%201020,180%201200,120%20L1200,200%20L0,200%20Z'%20"
+    f"fill='{BRAND_BLUE.replace('#', '%23')}'%20fill-opacity='0.10'/%3E"
+    "%3C/svg%3E"
+)
 
 # ---------------------------------------------------------------------------
 # Custom CSS — every line flush-left (Markdown treats 4+ space indents as a
@@ -386,6 +437,11 @@ font-size: {BASE_FONT_SIZE};
 }}
 .stApp {{
 background-color: {BRAND_CREAM};
+background-image: linear-gradient(180deg, {BRAND_CREAM_SOFT} 0%, {BRAND_CREAM} 45%), url("{_WAVE_BG_SVG}");
+background-repeat: no-repeat, repeat-x;
+background-position: top, bottom;
+background-size: 100% 420px, 1200px 200px;
+background-attachment: fixed, fixed;
 }}
 .block-container {{
 padding-top: 2.8rem;
@@ -415,6 +471,10 @@ to {{ opacity: 1; transform: translateY(0); }}
 0% {{ background-position: 0% 50%; }}
 50% {{ background-position: 100% 50%; }}
 100% {{ background-position: 0% 50%; }}
+}}
+@keyframes aquaDrift {{
+0% {{ background-position-x: 0px, 0px; }}
+100% {{ background-position-x: -1200px, -1200px; }}
 }}
 .aqua-hero {{
 position: relative;
@@ -573,9 +633,54 @@ background-color: {BRAND_CREAM_SOFT};
 box-shadow: 0 4px 12px rgba(11, 118, 199, 0.15);
 transform: translateY(-2px);
 }}
+.aqua-primary-btn button {{
+background-color: {BRAND_BLUE} !important;
+color: #FFFFFF !important;
+border: none !important;
+}}
+.aqua-primary-btn button:hover {{
+background-color: {BRAND_BLUE_LIGHT} !important;
+color: #FFFFFF !important;
+}}
 section[data-testid="stSidebar"] {{
 background-color: {BRAND_WHITE};
+background-image: url("{_WAVE_BG_SVG}");
+background-repeat: repeat-x;
+background-position: bottom;
+background-size: 900px 150px;
 border-right: 1px solid {BRAND_BLUE}22;
+}}
+.aqua-sidebar-newchat button {{
+background-color: {BRAND_BLUE} !important;
+color: #FFFFFF !important;
+border: none !important;
+width: 100%;
+font-weight: 700;
+}}
+.aqua-sidebar-newchat button:hover {{
+background-color: {BRAND_BLUE_LIGHT} !important;
+transform: none;
+}}
+.aqua-history-btn button {{
+text-align: left !important;
+justify-content: flex-start !important;
+background: transparent !important;
+box-shadow: none !important;
+border: none !important;
+padding: 0.4rem 0.3rem !important;
+font-weight: 500 !important;
+color: {BRAND_BLUE_DARK} !important;
+}}
+.aqua-history-btn button:hover {{
+background: {BRAND_CREAM_SOFT} !important;
+transform: none !important;
+box-shadow: none !important;
+color: {BRAND_BLUE} !important;
+}}
+.aqua-history-active button {{
+background: {BRAND_BLUE}14 !important;
+color: {BRAND_BLUE} !important;
+font-weight: 700 !important;
 }}
 .whatsapp-float {{
 position: fixed;
@@ -617,6 +722,42 @@ box-sizing: border-box;
 }}
 .whatsapp-btn:hover {{
 opacity: 0.9;
+}}
+.aqua-login-wrap {{
+max-width: 520px;
+margin: 0 auto;
+}}
+.aqua-login-hero {{
+text-align: center;
+padding: 2.2rem 1rem 1rem 1rem;
+}}
+.aqua-login-hero img {{
+width: 84px;
+height: 84px;
+border-radius: 50%;
+background: {BRAND_WHITE};
+padding: 6px;
+box-shadow: 0 6px 18px rgba(11, 118, 199, 0.18);
+margin-bottom: 0.8rem;
+}}
+.aqua-login-title {{
+font-size: 2rem;
+font-weight: 800;
+color: {BRAND_BLUE_DARK};
+letter-spacing: -0.02em;
+}}
+.aqua-login-subtitle {{
+font-size: 1rem;
+color: {BRAND_BLUE};
+font-weight: 500;
+margin-bottom: 0.5rem;
+}}
+.aqua-mic-btn button {{
+border-radius: 50% !important;
+width: 2.6rem !important;
+height: 2.6rem !important;
+padding: 0 !important;
+font-size: 1.1rem !important;
 }}
 </style>
 <a href="{WHATSAPP_LINK}" target="_blank" class="whatsapp-float" title="Chat on WhatsApp">💬</a>"""
@@ -746,28 +887,107 @@ def speak_text(text, lang_code="en"):
 TTS_LANG_CODES = {"English": "en", "Spanish": "es", "French": "fr", "Grenadian Creole": "en"}
 
 # ---------------------------------------------------------------------------
-# LANGUAGE SELECTION GATE — first screen on a fresh session
+# Chat session helpers (multi-chat history, like a typical AI chat app)
 # ---------------------------------------------------------------------------
-if st.session_state.selected_language is None:
-    if os.path.exists(LOGO_PATH):
-        st.image(LOGO_PATH, width=110)
-    st.markdown("### 🌐 Choose your language / Escoja su idioma / Choisissez votre langue")
-    st.caption("Pin your language below. The AI will also automatically follow whatever language you type in during chat.")
+def _auto_name_from(text, limit=42):
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[:limit].rstrip() + "…"
 
-    cols = st.columns(4)
-    for col, lang in zip(cols, PRIMARY_LANGUAGES):
+def start_new_chat():
+    cur = st.session_state.chat_sessions[st.session_state.current_session_id]
+    if cur["messages"] and cur["name"] == "New chat":
+        first_user = next((m["content"] for m in cur["messages"] if m["role"] == "user"), None)
+        if first_user:
+            cur["name"] = _auto_name_from(first_user)
+    new_id = str(uuid.uuid4())
+    st.session_state.chat_sessions[new_id] = {"name": "New chat", "messages": []}
+    st.session_state.current_session_id = new_id
+    st.session_state.pop("chat", None)  # force a fresh Gemini chat session
+
+def switch_to_chat(session_id):
+    if session_id != st.session_state.current_session_id:
+        st.session_state.current_session_id = session_id
+        st.session_state.pop("chat", None)  # reseed Gemini session from this chat's transcript
+
+def ordered_session_ids():
+    # Current session first if it's brand new/empty; otherwise most-recently-touched first.
+    ids = list(st.session_state.chat_sessions.keys())
+    ids.remove(st.session_state.current_session_id)
+    ids.reverse()
+    return [st.session_state.current_session_id] + ids
+
+# ---------------------------------------------------------------------------
+# LOGIN / WELCOME GATE — first screen on a fresh session
+# ---------------------------------------------------------------------------
+if not st.session_state.auth_done:
+    st.markdown('<div class="aqua-login-wrap">', unsafe_allow_html=True)
+    logo_tag = f'<img src="data:image/png;base64,{logo_b64}" />' if logo_b64 else "💧"
+    st.markdown(f"""<div class="aqua-login-hero">
+{logo_tag}
+<div class="aqua-login-title">AquaAssist</div>
+<div class="aqua-login-subtitle">Your smart water support assistant — NAWASA</div>
+</div>""", unsafe_allow_html=True)
+
+    st.markdown('<div class="aqua-card">', unsafe_allow_html=True)
+
+    # --- Language selection ---
+    st.markdown(f"**🌐 {t('login_lang')}**")
+    lang_cols = st.columns(4)
+    for col, lang in zip(lang_cols, PRIMARY_LANGUAGES):
         with col:
-            if st.button(lang, use_container_width=True, key=f"lang_{lang}"):
+            active = st.session_state.selected_language == lang
+            if st.button(lang, use_container_width=True, key=f"lang_{lang}",
+                         type="primary" if active else "secondary"):
                 st.session_state.selected_language = lang
                 st.rerun()
-
     with st.expander("More languages"):
-        extra = st.selectbox("Search / select a language", [""] + EXTENDED_LANGUAGES)
-        if extra and st.button(f"Continue in {extra}"):
+        extra = st.selectbox("Search / select a language", [""] + EXTENDED_LANGUAGES,
+                              index=(EXTENDED_LANGUAGES.index(st.session_state.selected_language) + 1)
+                              if st.session_state.selected_language in EXTENDED_LANGUAGES else 0)
+        if extra:
             st.session_state.selected_language = extra
+
+    st.divider()
+
+    # --- API key ---
+    st.session_state.api_key = st.text_input(
+        f"🔑 {t('login_key')}", value=st.session_state.api_key, type="password",
+        help=t("login_key_help"),
+    )
+
+    st.divider()
+
+    # --- Guest vs account ---
+    st.markdown(f"**{t('login_choose')}**")
+    login_choice = st.radio(" ", [t("login_guest"), t("login_account")],
+                             label_visibility="collapsed", horizontal=True)
+
+    account_name, account_email = "", ""
+    if login_choice == t("login_account"):
+        account_name = st.text_input(t("login_name"))
+        account_email = st.text_input(t("login_email"))
+
+    st.markdown('<div class="aqua-primary-btn">', unsafe_allow_html=True)
+    start_clicked = st.button(f"💧 {t('login_start')}", use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    if start_clicked:
+        if not st.session_state.selected_language or not st.session_state.api_key:
+            st.error(t("login_missing"))
+        elif login_choice == t("login_account") and not account_name:
+            st.error(t("login_name") + " " + ("required" if st.session_state.selected_language == "English" else "*"))
+        else:
+            st.session_state.account_mode = "account" if login_choice == t("login_account") else "guest"
+            st.session_state.customer_name = account_name
+            st.session_state.customer_email = account_email
+            st.session_state.auth_done = True
             st.rerun()
 
+    st.markdown('</div>', unsafe_allow_html=True)  # aqua-card
+    st.markdown('</div>', unsafe_allow_html=True)  # aqua-login-wrap
     st.stop()
+
+api_key = st.session_state.api_key
 
 # ---------------------------------------------------------------------------
 # Sidebar
@@ -778,6 +998,31 @@ with st.sidebar:
 
     mode = st.radio("View", ["💬 Customer Portal", "🔐 Staff Portal"], label_visibility="collapsed")
 
+    if mode == "💬 Customer Portal":
+        st.markdown('<div class="aqua-sidebar-newchat">', unsafe_allow_html=True)
+        if st.button(t("new_chat"), use_container_width=True):
+            start_new_chat()
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        st.caption(t("chat_history"))
+        session_ids = ordered_session_ids()
+        if len(session_ids) == 1 and not st.session_state.chat_sessions[session_ids[0]]["messages"]:
+            st.caption(t("no_history"))
+        else:
+            for sid in session_ids:
+                sess = st.session_state.chat_sessions[sid]
+                label = sess["name"] if sess["messages"] or sess["name"] != "New chat" else t("new_chat")
+                is_active = sid == st.session_state.current_session_id
+                wrap_class = "aqua-history-btn aqua-history-active" if is_active else "aqua-history-btn"
+                st.markdown(f'<div class="{wrap_class}">', unsafe_allow_html=True)
+                if st.button(label, key=f"hist_{sid}", use_container_width=True):
+                    switch_to_chat(sid)
+                    st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+
+        st.divider()
+
     st.markdown(
         f'<a href="{WHATSAPP_LINK}" target="_blank" class="whatsapp-btn">📱 Chat on WhatsApp</a>',
         unsafe_allow_html=True,
@@ -785,22 +1030,38 @@ with st.sidebar:
     st.caption(f"📞 {NAWASA_PHONE}")
     st.caption(f"🌐 [nawasa.gd]({NAWASA_WEBSITE})")
     st.caption(f"🗣️ Language: {st.session_state.selected_language}")
-    if st.button("Change language"):
-        st.session_state.selected_language = None
-        st.rerun()
+    st.caption(f"👤 {'Guest' if st.session_state.account_mode == 'guest' else (st.session_state.customer_name or 'Account')}")
 
-    st.divider()
-    st.header("⚙️ Settings")
-    default_key = os.environ.get("GEMINI_API_KEY", "")
-    api_key = st.text_input("Gemini API Key", value=default_key, type="password",
-                             help="Get a key at https://aistudio.google.com/")
-    st.caption(f"Model: `{MODEL_NAME}`")
+    with st.expander("⚙️ Account & language"):
+        new_lang = st.selectbox(
+            t("preferred_language") if "preferred_language" in UI_TEXT["English"] else "Language",
+            PRIMARY_LANGUAGES + EXTENDED_LANGUAGES,
+            index=(PRIMARY_LANGUAGES + EXTENDED_LANGUAGES).index(st.session_state.selected_language)
+            if st.session_state.selected_language in PRIMARY_LANGUAGES + EXTENDED_LANGUAGES else 0,
+            key="sidebar_lang_select",
+        )
+        if new_lang != st.session_state.selected_language:
+            st.session_state.selected_language = new_lang
+            st.session_state.pop("chat", None)
+            st.rerun()
+
+        new_key = st.text_input("Gemini API Key", value=api_key, type="password",
+                                 help="Get a key at https://aistudio.google.com/")
+        if new_key != api_key:
+            st.session_state.api_key = new_key
+            st.rerun()
+        api_key = st.session_state.api_key
+
+        if st.button("Log out / switch account"):
+            st.session_state.auth_done = False
+            st.session_state.account_mode = None
+            st.rerun()
 
     if st.button("🔄 Reset conversation"):
         st.session_state.pop("chat", None)
         st.session_state.pop("client", None)
         st.session_state.pop("_key_used", None)
-        st.session_state.messages = []
+        st.session_state.chat_sessions[st.session_state.current_session_id]["messages"] = []
         st.rerun()
 
     with st.expander("📜 View system instruction"):
@@ -925,27 +1186,31 @@ contact_row = f"""<div class="aqua-contact-row">
 </div>"""
 st.markdown(contact_row, unsafe_allow_html=True)
 
-if not st.session_state.customer_name:
-    with st.expander(f"👋 {t('your_name')} (optional, helps us personalize your visit)"):
-        name_input = st.text_input(t("your_name"), key="name_capture")
-        if name_input:
-            st.session_state.customer_name = name_input
-            st.rerun()
-
 if not api_key:
-    st.info("👈 Enter your Gemini API key in the sidebar to start chatting.")
+    st.info("👈 Enter your Gemini API key in the sidebar (Account & language) to start chatting.")
     st.stop()
 
 # ---------------------------------------------------------------------------
-# Initialize client + chat session
+# Initialize client + chat session (recreated when key, language, or the
+# active chat session changes)
 # ---------------------------------------------------------------------------
 if ("chat" not in st.session_state
         or st.session_state.get("_key_used") != api_key
-        or st.session_state.get("_chat_language") != st.session_state.selected_language):
+        or st.session_state.get("_chat_language") != st.session_state.selected_language
+        or st.session_state.get("_chat_session_ref") != st.session_state.current_session_id):
     try:
         client = genai.Client(api_key=api_key)
         st.session_state.client = client
-        st.session_state.chat = client.chats.create(
+
+        # Reseed history from the active chat session's transcript, if any,
+        # so switching back to an older chat can still be continued.
+        seed_history = []
+        for m in st.session_state.messages:
+            if m["role"] in ("user", "assistant") and isinstance(m.get("content"), str):
+                role = "user" if m["role"] == "user" else "model"
+                seed_history.append(types.Content(role=role, parts=[types.Part.from_text(text=m["content"])]))
+
+        chat_kwargs = dict(
             model=MODEL_NAME,
             config=types.GenerateContentConfig(
                 system_instruction=build_system_instruction(st.session_state.selected_language),
@@ -953,8 +1218,16 @@ if ("chat" not in st.session_state
                 tools=[log_water_report],
             ),
         )
+        try:
+            st.session_state.chat = client.chats.create(history=seed_history, **chat_kwargs)
+        except TypeError:
+            # Older SDK versions may not accept `history=` — fall back to a
+            # fresh session; the displayed transcript is unaffected either way.
+            st.session_state.chat = client.chats.create(**chat_kwargs)
+
         st.session_state._key_used = api_key
         st.session_state._chat_language = st.session_state.selected_language
+        st.session_state._chat_session_ref = st.session_state.current_session_id
     except Exception as e:
         st.error(f"Failed to initialize Gemini client: {e}")
         st.stop()
@@ -968,6 +1241,72 @@ tab_chat, tab_faq, tab_report, tab_history, tab_settings = st.tabs(
 
 # ===================== CHAT TAB =====================
 with tab_chat:
+    ASSISTANT_AVATAR = LOGO_PATH if os.path.exists(LOGO_PATH) else "💧"
+    USER_AVATAR = "🧑"
+
+    for msg in st.session_state.messages:
+        avatar = ASSISTANT_AVATAR if msg["role"] == "assistant" else USER_AVATAR
+        with st.chat_message(msg["role"], avatar=avatar):
+            st.markdown(msg["content"])
+            if msg.get("audio"):
+                st.audio(msg["audio"])
+            if msg.get("attachment_name"):
+                st.caption(f"📎 {msg['attachment_name']}")
+
+    if not st.session_state.messages:
+        with st.chat_message("assistant", avatar=ASSISTANT_AVATAR):
+            st.markdown(t("welcome"))
+
+    # --- Input bar: text + built-in file attach (paperclip), plus a compact
+    # mic button right beside it for voice messages, and the voice-reply
+    # toggle. All grouped together so it reads as one input area, per the
+    # request to move voice/attach into the text bar instead of a separate
+    # quick-actions row.
+    input_row = st.columns([0.09, 0.08, 0.83])
+    with input_row[0]:
+        st.markdown('<div class="aqua-mic-btn">', unsafe_allow_html=True)
+        mic_clicked = st.button("🎤", key="mic_toggle_btn", help=t("voice_popover_label"))
+        st.markdown('</div>', unsafe_allow_html=True)
+    with input_row[1]:
+        st.session_state.voice_replies = st.toggle(
+            "🔊", value=st.session_state.voice_replies, disabled=not HAS_TTS,
+            help=t("voice_help_on") if HAS_TTS else t("voice_help_off"), label_visibility="visible",
+        )
+
+    voice_text_input = None
+    if mic_clicked:
+        st.session_state["_mic_open"] = not st.session_state.get("_mic_open", False)
+    if st.session_state.get("_mic_open"):
+        with st.container(border=True):
+            if HAS_MIC_RECORDER:
+                audio_bytes = audio_recorder(text="Tap to record", icon_size="2x", key="mic_recorder")
+                if audio_bytes:
+                    st.audio(audio_bytes)
+                    if st.button("Send recording", key="send_recording_btn"):
+                        voice_text_input = ("__AUDIO__", audio_bytes, "audio/wav")
+                        st.session_state["_mic_open"] = False
+            else:
+                st.caption("Live mic recording isn't installed. Upload a voice note instead:")
+                uploaded_audio = st.file_uploader("Voice note", type=["mp3", "wav", "m4a", "ogg"], key="voice_upload")
+                if uploaded_audio and st.button("Send this voice note", key="send_upload_btn"):
+                    voice_text_input = ("__AUDIO__", uploaded_audio.read(), uploaded_audio.type or "audio/mpeg")
+                    st.session_state["_mic_open"] = False
+
+    # Streamlit's built-in chat_input with accept_file gives the text box its
+    # own attach (paperclip) icon, so files travel with the typed message.
+    try:
+        chat_submission = st.chat_input(
+            t("ask_placeholder"), accept_file=True,
+            file_type=["jpg", "jpeg", "png", "pdf", "doc", "docx", "mp3", "wav", "m4a"],
+        )
+        typed_input = chat_submission.text if chat_submission else None
+        uploaded_files = chat_submission.files if chat_submission else []
+    except TypeError:
+        # Installed Streamlit version predates accept_file — fall back to a
+        # plain text box; attachments then only work via the Report tab.
+        typed_input = st.chat_input(t("ask_placeholder"))
+        uploaded_files = []
+
     st.markdown(f'<div class="aqua-section-label">{t("quick_actions")}</div>', unsafe_allow_html=True)
     quick_actions = {
         t("qa_report_label"): t("qa_report_prompt"),
@@ -979,56 +1318,8 @@ with tab_chat:
     queued_prompt = None
     for col, (label, prompt) in zip(qa_cols, quick_actions.items()):
         with col:
-            if st.button(label, use_container_width=True):
+            if st.button(label, use_container_width=True, key=f"qa_{label}"):
                 queued_prompt = prompt
-
-    voice_col1, voice_col2 = st.columns([1, 1])
-    with voice_col1:
-        st.session_state.voice_replies = st.toggle(
-            t("voice_toggle_label"), value=st.session_state.voice_replies,
-            disabled=not HAS_TTS,
-            help=t("voice_help_on") if HAS_TTS else t("voice_help_off"),
-        )
-
-    voice_text_input = None
-    with voice_col2:
-        with st.popover(t("voice_popover_label")):
-            if HAS_MIC_RECORDER:
-                audio_bytes = audio_recorder(text="Tap to record", icon_size="2x")
-                if audio_bytes:
-                    st.audio(audio_bytes)
-                    if st.button("Send recording"):
-                        voice_text_input = ("__AUDIO__", audio_bytes, "audio/wav")
-            else:
-                st.caption("Live mic recording isn't installed. Upload a voice note instead:")
-                uploaded_audio = st.file_uploader("Voice note", type=["mp3", "wav", "m4a", "ogg"], key="voice_upload")
-                if uploaded_audio and st.button("Send this voice note"):
-                    voice_text_input = ("__AUDIO__", uploaded_audio.read(), uploaded_audio.type or "audio/mpeg")
-
-    st.markdown('<div class="aqua-section-label">💬 Chat</div>', unsafe_allow_html=True)
-
-    ASSISTANT_AVATAR = LOGO_PATH if os.path.exists(LOGO_PATH) else "💧"
-    USER_AVATAR = "🧑"
-
-    for msg in st.session_state.messages:
-        avatar = ASSISTANT_AVATAR if msg["role"] == "assistant" else USER_AVATAR
-        with st.chat_message(msg["role"], avatar=avatar):
-            st.markdown(msg["content"])
-            if msg.get("audio"):
-                st.audio(msg["audio"])
-
-    if not st.session_state.messages:
-        with st.chat_message("assistant", avatar=ASSISTANT_AVATAR):
-            st.markdown(t("welcome"))
-
-    # IMPORTANT: chat_input is called AFTER the history loop above, so it
-    # lands below all existing messages in the layout. Any new message is
-    # only appended to session_state here — it is NOT drawn inline — and we
-    # immediately st.rerun() so the loop above redraws with the new message
-    # included, in the correct position, on a clean pass. This avoids the
-    # ordering bug where a just-sent message and its reply appeared BELOW
-    # the input box instead of above it.
-    typed_input = st.chat_input(t("ask_placeholder"))
 
     user_turn = None
     is_audio_turn = False
@@ -1064,12 +1355,31 @@ with tab_chat:
             st.rerun()
         else:
             cleaned_input = user_turn.strip()
-            if cleaned_input:
-                st.session_state.messages.append({"role": "user", "content": cleaned_input})
+            if cleaned_input or uploaded_files:
+                attachment_name = ""
+                message_parts = []
+                if cleaned_input:
+                    message_parts.append(cleaned_input)
+                    display_text = cleaned_input
+                else:
+                    display_text = "📎 Sent an attachment"
+
+                for uf in (uploaded_files or []):
+                    ensure_files()
+                    file_bytes = uf.read()
+                    attachment_name = f"{uuid.uuid4().hex[:8]}_{uf.name}"
+                    with open(os.path.join(ATTACHMENTS_DIR, attachment_name), "wb") as out:
+                        out.write(file_bytes)
+                    message_parts.append(types.Part.from_bytes(data=file_bytes, mime_type=uf.type or "application/octet-stream"))
+
+                st.session_state.messages.append({
+                    "role": "user", "content": display_text,
+                    "attachment_name": attachment_name if uploaded_files else None,
+                })
 
                 with st.spinner("Thinking..."):
                     try:
-                        bot_response = st.session_state.chat.send_message(cleaned_input)
+                        bot_response = st.session_state.chat.send_message(message_parts if message_parts else cleaned_input)
                         reply_text = bot_response.text
                     except Exception as e:
                         reply_text = f"⚠️ Error: {e}"
@@ -1100,9 +1410,9 @@ with tab_history:
 
     st.caption(f"{len(st.session_state.messages)} messages in this session.")
     if st.button("🗑️ Clear chat history", key="clear_history_main"):
-        st.session_state.messages = []
+        st.session_state.chat_sessions[st.session_state.current_session_id]["messages"] = []
         st.rerun()
-    st.caption("Note: history is kept for this browser session only. Closing the tab clears it — persistent history across visits would need user accounts, which isn't part of this build yet.")
+    st.caption("Tip: use “+ New chat” in the sidebar to start a fresh conversation without losing this one — it's saved automatically under Recent chats.")
     st.markdown('</div>', unsafe_allow_html=True)
 
     with st.expander("🕵️ Raw Gemini session (technical/debug view)"):
@@ -1235,7 +1545,8 @@ with tab_settings:
 
     new_lang = st.selectbox(t("preferred_language"), PRIMARY_LANGUAGES + EXTENDED_LANGUAGES,
                               index=(PRIMARY_LANGUAGES + EXTENDED_LANGUAGES).index(st.session_state.selected_language)
-                              if st.session_state.selected_language in PRIMARY_LANGUAGES + EXTENDED_LANGUAGES else 0)
+                              if st.session_state.selected_language in PRIMARY_LANGUAGES + EXTENDED_LANGUAGES else 0,
+                              key="settings_lang_select")
     if new_lang != st.session_state.selected_language:
         st.session_state.selected_language = new_lang
         st.rerun()
