@@ -215,11 +215,46 @@ FAQS = [
      "a": "The main office is on the Carenage, St. George's, with sub-offices in Gouyave, Grenville, Sauteurs, St. David's, and Grand Anse."},
 ]
 
-def search_faqs(query):
+def search_faqs(query, faq_list=None):
+    faq_list = faq_list if faq_list is not None else FAQS
     if not query:
-        return FAQS
+        return faq_list
     q = query.lower()
-    return [f for f in FAQS if q in f["q"].lower() or q in f["a"].lower() or q in f["category"].lower()]
+    return [f for f in faq_list if q in f["q"].lower() or q in f["a"].lower() or q in f["category"].lower()]
+
+def get_translated_faqs(language, client):
+    """Returns the FAQ list translated into `language`, using Gemini once per
+    language and caching the result in session state so it isn't re-translated
+    on every rerun/click. Falls back to English on any failure."""
+    if language == "English":
+        return FAQS
+
+    cache = st.session_state.setdefault("faq_translations", {})
+    if language in cache:
+        return cache[language]
+
+    import json
+    try:
+        prompt = (
+            f"Translate the 'category', 'q', and 'a' fields of every item in this JSON array into "
+            f"{language}. Keep the exact same JSON array structure and number of items — do not add, "
+            f"remove, merge, or summarize any items, and do not add commentary. Preserve numbers, "
+            f"dollar amounts, and proper nouns like NAWASA as-is. Respond with ONLY the translated "
+            f"JSON array, nothing else:\n\n{json.dumps(FAQS, ensure_ascii=False)}"
+        )
+        response = client.models.generate_content(model=MODEL_NAME, contents=prompt)
+        raw = response.text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        translated = json.loads(raw)
+        if isinstance(translated, list) and len(translated) == len(FAQS):
+            cache[language] = translated
+            return translated
+    except Exception:
+        pass
+    return FAQS  # fall back silently to English if translation fails
 
 # ---------------------------------------------------------------------------
 # Brand palette — swaps for dark mode / high contrast
@@ -1000,8 +1035,16 @@ with tab_history:
 with tab_faq:
     st.markdown('<div class="aqua-section-label">❓ Frequently Asked Questions</div>', unsafe_allow_html=True)
     st.caption("Sourced from the official NAWASA FAQ page (nawasa.gd).")
+
+    active_faqs = FAQS
+    if st.session_state.selected_language != "English":
+        with st.spinner(f"Loading FAQs in {st.session_state.selected_language}..."):
+            active_faqs = get_translated_faqs(st.session_state.selected_language, st.session_state.client)
+        if active_faqs is FAQS:
+            st.caption(f"⚠️ Couldn't translate FAQs into {st.session_state.selected_language} right now — showing English.")
+
     faq_query = st.text_input("Search FAQs", placeholder="e.g. billing, leak, disconnection...")
-    results = search_faqs(faq_query)
+    results = search_faqs(faq_query, active_faqs)
     if not results:
         st.info("No matching FAQ found. Try the Chat tab to ask the AI directly, or contact a representative.")
     else:
