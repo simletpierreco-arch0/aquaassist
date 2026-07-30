@@ -1,0 +1,6 @@
+# Add these two lines to your existing requirements.txt to enable the
+# interactive Grenada map on the Report & Track tab. Everything else in
+# the app already works without them (it falls back to manual lat/lng
+# entry if they're missing).
+folium
+streamlit-folium
