@@ -138,30 +138,42 @@ UI_TEXT = {
     "English": {
         "welcome": "Welcome to AquaAssist! 💧 I'm here to help with your NAWASA water services.",
         "tab_chat": "💬 Chat", "tab_faq": "❓ FAQ", "tab_report": "📋 Report & Track",
-        "tab_settings": "⚙️ Settings", "report_issue": "🚿 Report an issue",
+        "tab_history": "🕘 History", "tab_settings": "⚙️ Settings",
+        "report_issue": "🚿 Report an issue",
         "quick_actions": "💧 Quick actions", "ask_placeholder": "Ask AquaAssist something...",
         "your_name": "Your name", "continue": "Continue",
+        "call_us": "Call Us", "whatsapp_label": "WhatsApp", "chat_now": "Chat now",
+        "website_label": "Website",
     },
     "Grenadian Creole": {
         "welcome": "Welcome to AquaAssist! 💧 Ah deh fu help yuh wit yuh NAWASA watah service dem.",
         "tab_chat": "💬 Chat", "tab_faq": "❓ FAQ", "tab_report": "📋 Report & Track",
-        "tab_settings": "⚙️ Settings", "report_issue": "🚿 Report an issue",
+        "tab_history": "🕘 History", "tab_settings": "⚙️ Settings",
+        "report_issue": "🚿 Report an issue",
         "quick_actions": "💧 Quick actions", "ask_placeholder": "Aks AquaAssist sumting...",
         "your_name": "Yuh name", "continue": "Continue",
+        "call_us": "Call We", "whatsapp_label": "WhatsApp", "chat_now": "Chat now",
+        "website_label": "Website",
     },
     "Spanish": {
         "welcome": "¡Bienvenido a AquaAssist! 💧 Estoy aquí para ayudarte con los servicios de agua de NAWASA.",
         "tab_chat": "💬 Chat", "tab_faq": "❓ Preguntas", "tab_report": "📋 Reportar y Rastrear",
-        "tab_settings": "⚙️ Ajustes", "report_issue": "🚿 Reportar un problema",
+        "tab_history": "🕘 Historial", "tab_settings": "⚙️ Ajustes",
+        "report_issue": "🚿 Reportar un problema",
         "quick_actions": "💧 Acciones rápidas", "ask_placeholder": "Pregúntale algo a AquaAssist...",
         "your_name": "Tu nombre", "continue": "Continuar",
+        "call_us": "Llámanos", "whatsapp_label": "WhatsApp", "chat_now": "Chatea ahora",
+        "website_label": "Sitio web",
     },
     "French": {
         "welcome": "Bienvenue chez AquaAssist! 💧 Je suis là pour vous aider avec les services d'eau de la NAWASA.",
         "tab_chat": "💬 Discussion", "tab_faq": "❓ FAQ", "tab_report": "📋 Signaler et Suivre",
-        "tab_settings": "⚙️ Paramètres", "report_issue": "🚿 Signaler un problème",
+        "tab_history": "🕘 Historique", "tab_settings": "⚙️ Paramètres",
+        "report_issue": "🚿 Signaler un problème",
         "quick_actions": "💧 Actions rapides", "ask_placeholder": "Demandez quelque chose à AquaAssist...",
         "your_name": "Votre nom", "continue": "Continuer",
+        "call_us": "Appelez-nous", "whatsapp_label": "WhatsApp", "chat_now": "Discuter maintenant",
+        "website_label": "Site web",
     },
 }
 
@@ -495,11 +507,13 @@ st.markdown(CSS_BLOCK, unsafe_allow_html=True)
 # ---------------------------------------------------------------------------
 # System instruction
 # ---------------------------------------------------------------------------
-SYSTEM_INSTRUCTION = """
+def build_system_instruction(selected_language):
+    return f"""
 You are AquaAssist, a friendly virtual customer assistant for the National Water and Sewerage Authority (NAWASA) of Grenada.
 
 LANGUAGE RULE:
-Always reply in the same language the customer writes in — including English, French, Spanish, or Grenadian Creole/patois. Do not default to English if the customer used another language or dialect. If a customer switches language mid-conversation, switch with them. If you are unsure which language or dialect was used, ask the customer to confirm rather than guessing.
+The customer has selected "{selected_language}" as their preferred language. Reply in {selected_language} by default, from your very first message.
+However, if the customer types in a different language or dialect than {selected_language} — including English, French, Spanish, or Grenadian Creole/patois — switch immediately to match whatever they actually typed, for that message and going forward, even if it differs from their originally selected language. Do not default to English if the customer used another language or dialect. If a customer switches language mid-conversation, switch with them. If you are unsure which language or dialect was used, ask the customer to confirm rather than guessing.
 
 Use the following facts to answer user questions:
 - Help customers report water leaks by collecting the location and relevant details.
@@ -671,7 +685,7 @@ with st.sidebar:
         st.rerun()
 
     with st.expander("📜 View system instruction"):
-        st.text(SYSTEM_INSTRUCTION)
+        st.text(build_system_instruction(st.session_state.selected_language))
 
     if HAS_MIC_RECORDER:
         st.caption("🎤 Live mic recording: enabled")
@@ -776,17 +790,17 @@ st.markdown(chat_hero, unsafe_allow_html=True)
 contact_row = f"""<div class="aqua-contact-row">
 <a href="tel:{NAWASA_PHONE.replace(' ', '').replace('(', '').replace(')', '').replace('-', '')}" class="aqua-contact-card">
 <span class="aqua-contact-icon">📞</span>
-<span class="aqua-contact-label">Call Us</span>
+<span class="aqua-contact-label">{t('call_us')}</span>
 <span class="aqua-contact-value">{NAWASA_PHONE}</span>
 </a>
 <a href="{WHATSAPP_LINK}" target="_blank" class="aqua-contact-card">
 <span class="aqua-contact-icon">💬</span>
-<span class="aqua-contact-label">WhatsApp</span>
-<span class="aqua-contact-value">Chat now</span>
+<span class="aqua-contact-label">{t('whatsapp_label')}</span>
+<span class="aqua-contact-value">{t('chat_now')}</span>
 </a>
 <a href="{NAWASA_WEBSITE}" target="_blank" class="aqua-contact-card">
 <span class="aqua-contact-icon">🌐</span>
-<span class="aqua-contact-label">Website</span>
+<span class="aqua-contact-label">{t('website_label')}</span>
 <span class="aqua-contact-value">nawasa.gd</span>
 </a>
 </div>"""
@@ -806,19 +820,22 @@ if not api_key:
 # ---------------------------------------------------------------------------
 # Initialize client + chat session
 # ---------------------------------------------------------------------------
-if "chat" not in st.session_state or st.session_state.get("_key_used") != api_key:
+if ("chat" not in st.session_state
+        or st.session_state.get("_key_used") != api_key
+        or st.session_state.get("_chat_language") != st.session_state.selected_language):
     try:
         client = genai.Client(api_key=api_key)
         st.session_state.client = client
         st.session_state.chat = client.chats.create(
             model=MODEL_NAME,
             config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_INSTRUCTION,
+                system_instruction=build_system_instruction(st.session_state.selected_language),
                 temperature=0.7,
                 tools=[log_water_report],
             ),
         )
         st.session_state._key_used = api_key
+        st.session_state._chat_language = st.session_state.selected_language
     except Exception as e:
         st.error(f"Failed to initialize Gemini client: {e}")
         st.stop()
@@ -826,8 +843,8 @@ if "chat" not in st.session_state or st.session_state.get("_key_used") != api_ke
 # ---------------------------------------------------------------------------
 # Tabs — Chat / FAQ / Report & Track / Settings
 # ---------------------------------------------------------------------------
-tab_chat, tab_faq, tab_report, tab_settings = st.tabs(
-    [t("tab_chat"), t("tab_faq"), t("tab_report"), t("tab_settings")]
+tab_chat, tab_faq, tab_report, tab_history, tab_settings = st.tabs(
+    [t("tab_chat"), t("tab_faq"), t("tab_report"), t("tab_history"), t("tab_settings")]
 )
 
 # ===================== CHAT TAB =====================
@@ -945,7 +962,31 @@ with tab_chat:
                             st.audio(reply_audio)
                 st.session_state.messages.append({"role": "assistant", "content": reply_text, "audio": reply_audio})
 
-    with st.expander("🕵️ Chat history audit (raw Gemini session)"):
+
+# ===================== HISTORY TAB =====================
+with tab_history:
+    st.markdown(f'<div class="aqua-section-label">{t("tab_history")}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="aqua-card">', unsafe_allow_html=True)
+    history_search = st.text_input("Search this conversation", key="history_search_main")
+    shown_messages = st.session_state.messages
+    if history_search:
+        shown_messages = [m for m in shown_messages if history_search.lower() in m["content"].lower()]
+
+    if not shown_messages:
+        st.caption("No messages to show yet." if not history_search else "No matches found.")
+    else:
+        for m in shown_messages:
+            role_label = "🧑 You" if m["role"] == "user" else "💧 AquaAssist"
+            st.markdown(f"**{role_label}:** {m['content']}")
+
+    st.caption(f"{len(st.session_state.messages)} messages in this session.")
+    if st.button("🗑️ Clear chat history", key="clear_history_main"):
+        st.session_state.messages = []
+        st.rerun()
+    st.caption("Note: history is kept for this browser session only. Closing the tab clears it — persistent history across visits would need user accounts, which isn't part of this build yet.")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    with st.expander("🕵️ Raw Gemini session (technical/debug view)"):
         if "chat" in st.session_state:
             try:
                 for message in st.session_state.chat.get_history():
@@ -1075,17 +1116,5 @@ with tab_settings:
 
     st.markdown('<div class="aqua-section-label">💬 Conversation</div>', unsafe_allow_html=True)
     st.markdown('<div class="aqua-card">', unsafe_allow_html=True)
-    history_search = st.text_input("Search your chat history")
-    if history_search:
-        matches = [m for m in st.session_state.messages if history_search.lower() in m["content"].lower()]
-        if matches:
-            for m in matches:
-                st.write(f"**{m['role']}:** {m['content']}")
-        else:
-            st.caption("No matches in this session's history.")
-    st.caption(f"{len(st.session_state.messages)} messages in this session.")
-    if st.button("🗑️ Clear chat history"):
-        st.session_state.messages = []
-        st.rerun()
-    st.caption("Note: chat history and preferences are kept for this browser session only. Closing the tab clears them — persistent history across visits would need user accounts, which isn't part of this build yet.")
+    st.caption(f"{len(st.session_state.messages)} messages in this session. Go to the History tab to search or clear your conversation.")
     st.markdown('</div>', unsafe_allow_html=True)
