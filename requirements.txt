@@ -2,9 +2,7 @@ streamlit
 google-genai
 pandas
 gTTS
+audio-recorder-streamlit
 
-# Optional upgrades — the app auto-detects these and enables extra features
-# if installed. It works fine without them (with graceful fallbacks), but
-# uncomment for the full experience:
-# audio-recorder-streamlit   # enables live in-browser mic recording
+# Optional upgrade — not enabled by default:
 # streamlit-geolocation      # enables one-tap GPS location capture
