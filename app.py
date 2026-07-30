@@ -388,7 +388,7 @@ font-size: {BASE_FONT_SIZE};
 background-color: {BRAND_CREAM};
 }}
 .block-container {{
-padding-top: 1rem;
+padding-top: 2.8rem;
 max-width: 780px;
 }}
 ::-webkit-scrollbar {{
@@ -1021,6 +1021,13 @@ with tab_chat:
         with st.chat_message("assistant", avatar=ASSISTANT_AVATAR):
             st.markdown(t("welcome"))
 
+    # IMPORTANT: chat_input is called AFTER the history loop above, so it
+    # lands below all existing messages in the layout. Any new message is
+    # only appended to session_state here — it is NOT drawn inline — and we
+    # immediately st.rerun() so the loop above redraws with the new message
+    # included, in the correct position, on a clean pass. This avoids the
+    # ordering bug where a just-sent message and its reply appeared BELOW
+    # the input box instead of above it.
     typed_input = st.chat_input(t("ask_placeholder"))
 
     user_turn = None
@@ -1037,49 +1044,42 @@ with tab_chat:
         if is_audio_turn:
             _, audio_bytes, mime_type = user_turn
             st.session_state.messages.append({"role": "user", "content": "🎤 (voice message)"})
-            with st.chat_message("user", avatar=USER_AVATAR):
-                st.markdown("🎤 (voice message)")
-                st.audio(audio_bytes)
 
-            with st.chat_message("assistant", avatar=ASSISTANT_AVATAR):
-                with st.spinner("Listening..."):
-                    try:
-                        audio_part = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
-                        bot_response = st.session_state.chat.send_message([
-                            audio_part,
-                            "Please respond to this voice message from a NAWASA customer.",
-                        ])
-                        reply_text = bot_response.text
-                    except Exception as e:
-                        reply_text = f"⚠️ Error processing voice message: {e}"
-                st.markdown(reply_text)
-                reply_audio = None
-                if st.session_state.voice_replies:
-                    reply_audio = speak_text(reply_text, TTS_LANG_CODES.get(st.session_state.selected_language, "en"))
-                    if reply_audio:
-                        st.audio(reply_audio)
+            with st.spinner("Listening..."):
+                try:
+                    audio_part = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
+                    bot_response = st.session_state.chat.send_message([
+                        audio_part,
+                        "Please respond to this voice message from a NAWASA customer.",
+                    ])
+                    reply_text = bot_response.text
+                except Exception as e:
+                    reply_text = f"⚠️ Error processing voice message: {e}"
+
+            reply_audio = None
+            if st.session_state.voice_replies:
+                reply_audio = speak_text(reply_text, TTS_LANG_CODES.get(st.session_state.selected_language, "en"))
+
             st.session_state.messages.append({"role": "assistant", "content": reply_text, "audio": reply_audio})
+            st.rerun()
         else:
             cleaned_input = user_turn.strip()
             if cleaned_input:
                 st.session_state.messages.append({"role": "user", "content": cleaned_input})
-                with st.chat_message("user", avatar=USER_AVATAR):
-                    st.markdown(cleaned_input)
 
-                with st.chat_message("assistant", avatar=ASSISTANT_AVATAR):
-                    with st.spinner("Thinking..."):
-                        try:
-                            bot_response = st.session_state.chat.send_message(cleaned_input)
-                            reply_text = bot_response.text
-                        except Exception as e:
-                            reply_text = f"⚠️ Error: {e}"
-                    st.markdown(reply_text)
-                    reply_audio = None
-                    if st.session_state.voice_replies:
-                        reply_audio = speak_text(reply_text, TTS_LANG_CODES.get(st.session_state.selected_language, "en"))
-                        if reply_audio:
-                            st.audio(reply_audio)
+                with st.spinner("Thinking..."):
+                    try:
+                        bot_response = st.session_state.chat.send_message(cleaned_input)
+                        reply_text = bot_response.text
+                    except Exception as e:
+                        reply_text = f"⚠️ Error: {e}"
+
+                reply_audio = None
+                if st.session_state.voice_replies:
+                    reply_audio = speak_text(reply_text, TTS_LANG_CODES.get(st.session_state.selected_language, "en"))
+
                 st.session_state.messages.append({"role": "assistant", "content": reply_text, "audio": reply_audio})
+                st.rerun()
 
 
 # ===================== HISTORY TAB =====================
