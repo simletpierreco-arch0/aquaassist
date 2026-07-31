@@ -1522,9 +1522,9 @@ with tab_chat:
     }
     qa_cols = st.columns(len(quick_actions))
     queued_prompt = None
-    for col, (label, prompt) in zip(qa_cols, quick_actions.items()):
+    for qa_idx, (col, (label, prompt)) in enumerate(zip(qa_cols, quick_actions.items())):
         with col:
-            if st.button(label, use_container_width=True, key=f"qa_{label}"):
+            if st.button(label, use_container_width=True, key=f"qa_{qa_idx}"):
                 queued_prompt = prompt
 
     user_turn = None
@@ -1651,13 +1651,17 @@ with tab_faq:
         categories = sorted(set(f["category"] for f in results))
         for cat in categories:
             st.markdown(f"**{cat}**")
-            for f in [x for x in results if x["category"] == cat]:
+            for faq_idx, f in enumerate([x for x in results if x["category"] == cat]):
                 faq_html = f"""<div class="aqua-faq-item">
 <div class="aqua-faq-cat">{f['category']}</div>
 <b>{f['q']}</b><br>{f['a']}
 </div>"""
                 st.markdown(faq_html, unsafe_allow_html=True)
-                if HAS_TTS and st.button(f"🔊 Read aloud", key=f"faq_audio_{f['q'][:20]}"):
+                # Key is index-based (not sliced question text) — two FAQ
+                # items with the same first ~20 characters, especially after
+                # translation, previously collided on the same widget key
+                # and crashed the app with StreamlitDuplicateElementKey.
+                if HAS_TTS and st.button(f"🔊 Read aloud", key=f"faq_audio_{cat}_{faq_idx}"):
                     audio = speak_text(f["a"], TTS_LANG_CODES.get(st.session_state.selected_language, "en"))
                     if audio:
                         st.audio(audio)
