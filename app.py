@@ -10,7 +10,8 @@ Folder layout expected:
     app.py
     assets/aquaassist_logo.png
     .streamlit/config.toml
-    data/reports.csv          (auto-created)
+    data/reports.csv          (auto-created, and auto-migrated if its schema
+                                is missing a column added in a later update)
     data/notifications.csv    (auto-created)
     attachments/              (auto-created, uploaded report files + chat attachments)
 
@@ -72,10 +73,6 @@ REPORTS_PATH = os.path.join("data", "reports.csv")
 NOTIFY_PATH = os.path.join("data", "notifications.csv")
 OUTAGES_PATH = os.path.join("data", "outages.csv")
 ATTACHMENTS_DIR = "attachments"
-# NOTE ON SCHEMA CHANGE: "severity" is a new column (photo-based triage). If
-# you have an existing data/reports.csv from before this update, delete it
-# (or manually add a "severity" column to its header row) so the columns
-# line up — otherwise old and new rows will be misaligned.
 REPORTS_FIELDS = ["reference", "timestamp", "name", "phone", "location", "issue_type",
                    "description", "attachment", "status", "severity"]
 NOTIFY_FIELDS = ["timestamp", "contact", "categories"]
@@ -257,13 +254,10 @@ def get_ui_dict(language):
     """Returns the UI_TEXT dict for `language`, auto-translating and caching
     it via Gemini the first time that language is used this session.
 
-    IMPORTANT: unlike the earlier version of this function, a failed
-    translation attempt is NOT permanently remembered. It is only
-    rate-limited (so we don't hammer the API on every Streamlit rerun,
-    e.g. while the user is still typing their key) and a warning is
-    surfaced via st.session_state["ui_translation_warning"] so the caller
-    can show the user *why* the UI is still in English, instead of the
-    previous silent-forever fallback.
+    A failed translation attempt is NOT permanently remembered — it is only
+    rate-limited (so we don't hammer the API on every Streamlit rerun) and a
+    warning is surfaced via st.session_state["ui_translation_warning"] so the
+    caller can show the user why the UI is still in English.
     """
     import time
 
@@ -278,9 +272,6 @@ def get_ui_dict(language):
     if not api_key:
         return UI_TEXT["English"]
 
-    # Rate-limit retries per (language, key) pair instead of permanently
-    # blocking them — a transient failure (rate limit, network hiccup, bad
-    # JSON) should be retried on a later rerun, not locked to English forever.
     attempts = st.session_state.setdefault("ui_translation_attempts", {})
     attempt_key = f"{language}::{api_key}"
     last_try = attempts.get(attempt_key, 0)
@@ -803,12 +794,42 @@ MODEL_NAME = "gemini-3.1-flash-lite"
 # ---------------------------------------------------------------------------
 # Report storage helpers
 # ---------------------------------------------------------------------------
+def _migrate_reports_schema():
+    """Self-heals data/reports.csv if its header is missing a column that
+    the current REPORTS_FIELDS expects (e.g. "severity", added after some
+    reports.csv files already existed). Without this, save_report() writes
+    rows with MORE values than the file's existing header has columns for,
+    which misaligns every row and breaks both Track a Report and the Staff
+    Portal when the file is read back. Existing data is preserved — this
+    only adds the missing column(s) with a safe default, it never deletes
+    rows or columns."""
+    import pandas as pd
+    if not os.path.exists(REPORTS_PATH):
+        return
+    try:
+        df = pd.read_csv(REPORTS_PATH)
+    except Exception:
+        # File is unreadable/corrupted in some other way — leave it alone
+        # here; load_reports() has its own fallback for this case.
+        return
+    changed = False
+    for col in REPORTS_FIELDS:
+        if col not in df.columns:
+            df[col] = "Unknown" if col == "severity" else ""
+            changed = True
+    ordered_cols = [c for c in REPORTS_FIELDS if c in df.columns] + [c for c in df.columns if c not in REPORTS_FIELDS]
+    if changed or list(df.columns) != ordered_cols:
+        df = df[ordered_cols]
+        df.to_csv(REPORTS_PATH, index=False)
+
 def ensure_files():
     os.makedirs(os.path.dirname(REPORTS_PATH), exist_ok=True)
     os.makedirs(ATTACHMENTS_DIR, exist_ok=True)
     if not os.path.exists(REPORTS_PATH):
         with open(REPORTS_PATH, "w", newline="", encoding="utf-8") as f:
             csv.DictWriter(f, fieldnames=REPORTS_FIELDS).writeheader()
+    else:
+        _migrate_reports_schema()
     if not os.path.exists(NOTIFY_PATH):
         with open(NOTIFY_PATH, "w", newline="", encoding="utf-8") as f:
             csv.DictWriter(f, fieldnames=NOTIFY_FIELDS).writeheader()
@@ -836,7 +857,21 @@ def save_report(name, phone, location, issue_type, description, attachment_name=
 def load_reports():
     ensure_files()
     import pandas as pd
-    return pd.read_csv(REPORTS_PATH)
+    try:
+        df = pd.read_csv(REPORTS_PATH)
+    except Exception:
+        # Still broken after migration (e.g. genuinely corrupted file) —
+        # rebuild a clean, empty, correctly-columned file rather than
+        # crashing Track a Report / the Staff Portal on every load.
+        with open(REPORTS_PATH, "w", newline="", encoding="utf-8") as f:
+            csv.DictWriter(f, fieldnames=REPORTS_FIELDS).writeheader()
+        df = pd.read_csv(REPORTS_PATH)
+    # Guarantee every expected column exists even if something upstream
+    # still slipped through, so callers can always safely do df["severity"] etc.
+    for col in REPORTS_FIELDS:
+        if col not in df.columns:
+            df[col] = "Unknown" if col == "severity" else ""
+    return df
 
 def update_report_status(reference, new_status):
     import pandas as pd
@@ -846,7 +881,7 @@ def update_report_status(reference, new_status):
 
 def track_report(reference):
     df = load_reports()
-    match = df[df["reference"].str.upper() == reference.strip().upper()]
+    match = df[df["reference"].astype(str).str.upper() == reference.strip().upper()]
     return match.iloc[0] if not match.empty else None
 
 def save_notification_signup(contact, categories):
@@ -895,7 +930,12 @@ def save_outage(parish, message, start_date, end_date):
 def load_outages():
     ensure_files()
     import pandas as pd
-    return pd.read_csv(OUTAGES_PATH)
+    try:
+        return pd.read_csv(OUTAGES_PATH)
+    except Exception:
+        with open(OUTAGES_PATH, "w", newline="", encoding="utf-8") as f:
+            csv.DictWriter(f, fieldnames=OUTAGE_FIELDS).writeheader()
+        return pd.read_csv(OUTAGES_PATH)
 
 def delete_outage(outage_id):
     import pandas as pd
@@ -1261,7 +1301,7 @@ if mode == "🔐 Staff Portal":
             column_config={
                 "status": st.column_config.SelectboxColumn("status", options=STATUS_STAGES),
             },
-            disabled=[c for c in REPORTS_FIELDS if c != "status"],
+            disabled=[c for c in REPORTS_FIELDS if c != "status" and c in reports_df.columns],
             key="staff_editor",
         )
         if st.button("💾 Save status changes"):
