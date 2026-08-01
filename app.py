@@ -73,19 +73,20 @@ st.markdown("""
 <div class="message">
 
 We would like to inform our users that the 
-<strong>NAWASA AquaAssist AI Chatbot</strong> has experienced a security issue 
+<strong>NAWASA AquaAssist AI Chatbot</strong> has been affected by a security issue 
 and is currently offline.
 
 <br><br>
 
-Our development team is actively working to restore the chatbot 
-and ensure that it is safe, secure, and fully operational before returning it 
-to our customers.
+Our team is working to get the chatbot back up and running as soon as possible.
 
 <br><br>
 
-<strong>Thank you for your patience and understanding while we work to bring 
-AquaAssist back online.</strong>
+<strong>We expect AquaAssist to be restored today by 5:00 PM.</strong>
+
+<br><br>
+
+Thank you for your patience and understanding while we work on this issue.
 
 <br><br>
 
@@ -97,7 +98,7 @@ Sub-Pod 1 Team</strong>
 
 
 st.warning(
-    "💧 AquaAssist is temporarily unavailable. Please check back soon for updates."
+    "💧 AquaAssist is temporarily unavailable. Please check back after 5:00 PM for updates."
 )
 
 
