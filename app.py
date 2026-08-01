@@ -1,5 +1,6 @@
 """
-AquaAssist — Streamlit UI (Redesign: login gate, blue/white wave theme, multi-chat history)
+AquaAssist — Streamlit UI (Territory login, blue/white wave theme, multi-chat
+history, widget-optimized layout for embedding on the NAWASA website)
 NAWASA (National Water and Sewerage Authority, Grenada) AI customer support platform.
 
 Run with:
@@ -9,6 +10,10 @@ Run with:
 Folder layout expected:
     app.py
     assets/aquaassist_logo.png
+    assets/nawasa_logo.png    (OPTIONAL — the official NAWASA authority logo,
+                                shown on the login screen. Not included in
+                                this codebase; a text badge is shown until
+                                you add the real file at this path.)
     .streamlit/config.toml
     data/reports.csv          (auto-created, and auto-migrated if its schema
                                 is missing a column added in a later update)
@@ -17,6 +22,22 @@ Folder layout expected:
 
 BEFORE DEPLOYING:
     STAFF_PASSCODE -> replace "changeme123" below, or set as env var / Streamlit secret
+
+LANGUAGE: the interface and every AI reply are always Standard English. The
+AI still fully understands Grenadian Creole/patois if a customer types in
+it — see build_system_instruction() — it simply never replies in it.
+
+TERRITORY: replaces the old language picker on the login screen. Selecting
+Grenada / Carriacou / Petit Martinique controls which WhatsApp number the
+app uses throughout (contact card, floating button, sidebar, and what the
+AI tells customers) — see TERRITORY_WHATSAPP.
+
+EMBEDDING AS A WEBSITE WIDGET: this app's layout (compact width, hidden
+Streamlit chrome, fade-in animation) is tuned to look like a purpose-built
+chat widget when embedded in an iframe on the NAWASA website. The actual
+floating "open/close" button behavior on nawasa.gd itself is NOT part of
+this codebase — that lives in the website's own HTML/JS as a small iframe
+embed snippet (ask for this separately if you need it).
 """
 
 import os
@@ -59,16 +80,18 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # NAWASA contact details
 # ---------------------------------------------------------------------------
-NAWASA_WHATSAPP_LINK = "https://wa.link/rt9dj1"
 NAWASA_PHONE = "(473) 440-2155"
 NAWASA_WEBSITE = "https://nawasa.gd/"
 STAFF_PASSCODE = os.environ.get("STAFF_PASSCODE", "changeme123")
-WHATSAPP_LINK = NAWASA_WHATSAPP_LINK
 
 # ---------------------------------------------------------------------------
 # Page config
 # ---------------------------------------------------------------------------
 LOGO_PATH = os.path.join("assets", "aquaassist_logo.png")
+# Official NAWASA authority logo — not provided in this codebase. Add the
+# real file at this path to have it appear on the login screen; until then
+# a styled "NAWASA" text badge is shown in its place.
+NAWASA_LOGO_PATH = os.path.join("assets", "nawasa_logo.png")
 REPORTS_PATH = os.path.join("data", "reports.csv")
 NOTIFY_PATH = os.path.join("data", "notifications.csv")
 OUTAGES_PATH = os.path.join("data", "outages.csv")
@@ -79,6 +102,19 @@ NOTIFY_FIELDS = ["timestamp", "contact", "categories"]
 OUTAGE_FIELDS = ["id", "parish", "message", "start_date", "end_date", "created_at"]
 STATUS_STAGES = ["Received", "Assigned", "Crew Dispatched", "In Progress", "Resolved"]
 SEVERITY_LEVELS = ["Unknown", "Low", "Medium", "High"]
+USAGE_PATH = os.path.join("data", "usage.csv")
+
+# ---------------------------------------------------------------------------
+# Rate limiting / cost control. Two independent caps:
+#   - SESSION_MESSAGE_LIMIT: max AI messages one browser session can send —
+#     stops a single runaway/abusive session from looping indefinitely.
+#   - DAILY_MESSAGE_LIMIT: max AI messages across ALL customers, all
+#     sessions, per calendar day — a hard ceiling on total API spend if this
+#     app is shared publicly with one API key. Both are overridable via
+#     environment variables without touching code.
+# ---------------------------------------------------------------------------
+SESSION_MESSAGE_LIMIT = int(os.environ.get("SESSION_MESSAGE_LIMIT", "40"))
+DAILY_MESSAGE_LIMIT = int(os.environ.get("DAILY_MESSAGE_LIMIT", "500"))
 
 st.set_page_config(
     page_title="AquaAssist",
@@ -90,11 +126,9 @@ st.set_page_config(
 # Session defaults
 # ---------------------------------------------------------------------------
 defaults = {
-    "auth_done": False,            # True once the customer clicks Guest or Log in
-    "account_mode": None,          # "guest" or "account"
-    "selected_language": None,
+    "auth_done": False,            # True once the customer submits territory + API key
+    "territory": "Grenada",
     "customer_name": "",
-    "customer_email": "",
     "api_key": os.environ.get("GEMINI_API_KEY", ""),
     "dark_mode": False,
     "high_contrast": False,
@@ -117,29 +151,25 @@ if not st.session_state.current_session_id:
 st.session_state.messages = st.session_state.chat_sessions[st.session_state.current_session_id]["messages"]
 
 # ---------------------------------------------------------------------------
-# Languages
+# Territories — replaces the old language selector. The chatbot's output
+# language is now always Standard English (it still UNDERSTANDS Grenadian
+# Creole input — see build_system_instruction() — it just never replies in
+# it). Territory instead controls which WhatsApp number the app points to.
 # ---------------------------------------------------------------------------
-PRIMARY_LANGUAGES = ["English", "Grenadian Creole", "Spanish", "French"]
-EXTENDED_LANGUAGES = [
-    "Portuguese", "German", "Italian", "Dutch", "Chinese (Simplified)",
-    "Chinese (Traditional)", "Japanese", "Korean", "Hindi", "Arabic",
-    "Russian", "Turkish", "Swahili", "Bengali", "Urdu", "Vietnamese",
-    "Thai", "Polish", "Greek", "Hebrew", "Romanian", "Czech", "Hungarian",
-    "Indonesian", "Malay",
-]
-# TTS voice codes gTTS understands, for languages where we know one. Anything
-# not listed here (including Grenadian Creole, and any language typed in
-# freely) falls back to an English voice reading the text phonetically.
-TTS_LANG_CODES = {
-    "English": "en", "Spanish": "es", "French": "fr",
-    "Portuguese": "pt", "German": "de", "Italian": "it", "Dutch": "nl",
-    "Chinese (Simplified)": "zh-CN", "Chinese (Traditional)": "zh-TW",
-    "Japanese": "ja", "Korean": "ko", "Hindi": "hi", "Arabic": "ar",
-    "Russian": "ru", "Turkish": "tr", "Swahili": "sw", "Bengali": "bn",
-    "Urdu": "ur", "Vietnamese": "vi", "Thai": "th", "Polish": "pl",
-    "Greek": "el", "Hebrew": "iw", "Romanian": "ro", "Czech": "cs",
-    "Hungarian": "hu", "Indonesian": "id", "Malay": "ms",
+TERRITORIES = ["Grenada", "Carriacou", "Petit Martinique"]
+TERRITORY_WHATSAPP = {
+    "Grenada": "https://wa.link/rt9dj1",
+    "Carriacou": "https://wa.link/wp6vfj",
+    "Petit Martinique": "https://wa.link/3dpbnj",
 }
+
+def get_whatsapp_link():
+    return TERRITORY_WHATSAPP.get(st.session_state.get("territory", "Grenada"), TERRITORY_WHATSAPP["Grenada"])
+
+# Recomputed every script run (Streamlit reruns top-to-bottom on every
+# interaction), so changing territory anywhere immediately updates every
+# WhatsApp button/link/reference throughout the app.
+WHATSAPP_LINK = get_whatsapp_link()
 
 # ---------------------------------------------------------------------------
 # Grenada geography — for the report location picker
@@ -150,154 +180,73 @@ GRENADA_PARISHES = [
 ]
 GRENADA_CENTER = (12.1165, -61.6790)
 
-# UI text: English is the only hand-written copy — the single source of
-# truth for every button, label, and tab name. Every OTHER language,
-# including Grenadian Creole and anything from the extended list or typed
-# in freely (Japanese, Korean, or literally any language name), is
-# auto-translated by Gemini on first use and cached in session state, via
-# get_ui_dict()/translate_ui_text() below.
+# UI text — Standard English only (per client requirement, the interface and
+# all AI replies are always English; the app no longer offers a language
+# picker or auto-translation).
 UI_TEXT = {
-    "English": {
-        "welcome": "Welcome to AquaAssist! 💧 I'm here to help with your NAWASA water services.",
-        "tab_chat": "💬 Chat", "tab_faq": "❓ FAQ", "tab_report": "📋 Report & Track",
-        "tab_history": "🕘 History", "tab_settings": "⚙️ Settings",
-        "report_issue": "🚿 Report an issue",
-        "quick_actions": "💧 Quick actions", "ask_placeholder": "Ask AquaAssist something...",
-        "your_name": "Your name", "continue": "Continue",
-        "call_us": "Call Us", "whatsapp_label": "WhatsApp", "chat_now": "Chat now",
-        "website_label": "Website",
-        "qa_report_label": "🚿 Report a Leak", "qa_report_prompt": "I'd like to report a water leak.",
-        "qa_maint_label": "🛠️ Maintenance", "qa_maint_prompt": "Are there any scheduled outages or planned maintenance in my area?",
-        "qa_bill_label": "💳 Pay My Bill", "qa_bill_prompt": "What are my options for paying my NAWASA bill?",
-        "qa_rep_label": "📞 Talk to a Rep", "qa_rep_prompt": "I'd like to speak with a customer service representative.",
-        "settings_preferences": "⚙️ Preferences", "preferred_language": "Preferred language",
-        "dark_mode": "🌙 Dark mode", "high_contrast": "🔲 High contrast mode", "large_text": "🔠 Larger text",
-        "accessibility_note": "Accessibility: this app supports keyboard navigation and screen readers natively through Streamlit's standard components.",
-        "settings_conversation": "💬 Conversation",
-        "conversation_note": "messages in this session. Go to the History tab to search or clear your conversation.",
-        "field_name": "Your name", "field_phone": "Phone number",
-        "field_location": "Location / address of the issue", "field_description": "Describe the issue",
-        "field_issue_type": "Issue type", "field_attachment": "Attach a photo, video, or document (optional)",
-        "submit_report": "Submit report", "report_form_expander": "Fill out a report — goes straight to NAWASA staff",
-        "track_report_label": "📍 Track a report", "track_report_placeholder": "Enter your reference number (e.g. NW-A1B2C3D)",
-        "get_notified": "🔔 Get notified", "notify_contact_label": "Email or phone number",
-        "notify_categories_label": "Notify me about", "subscribe_button": "Subscribe",
-        "voice_toggle_label": "🔊 Speak replies aloud", "voice_popover_label": "🎤",
-        "voice_help_on": "Uses gTTS to read the bot's replies aloud.", "voice_help_off": "Install gTTS to enable this.",
-        "issue_leak": "Leak", "issue_no_water": "No water supply", "issue_low_pressure": "Low pressure",
-        "issue_billing": "Billing issue", "issue_burst": "Burst main", "issue_hydrant": "Damaged hydrant",
-        "issue_quality": "Water quality concern", "issue_other": "Other",
-        "new_chat": "＋ New chat", "chat_history": "Recent chats", "no_history": "No previous chats yet.",
-        "login_title": "Welcome to AquaAssist", "login_subtitle": "Your smart water support assistant",
-        "login_choose": "How would you like to continue?", "login_guest": "Continue as Guest",
-        "login_account": "Log in with an account", "login_name": "Name", "login_email": "Email",
-        "login_key": "Gemini API key", "login_key_help": "Get a key at https://aistudio.google.com/",
-        "login_lang": "Choose your language", "login_start": "Start chatting",
-        "login_missing": "Please select a language and enter your API key first.",
-        "map_section_label": "📍 Pin location on map",
-        "map_parish_label": "Parish / Territory",
-        "map_address_label": "Street / Landmark Address",
-        "map_gps_button": "📡 Use My GPS Location",
-        "map_not_installed": "Interactive map isn't installed on this server — add `folium` and `streamlit-folium` to requirements.txt to enable it. Enter your parish and address manually for now.",
-        "map_pinned_caption": "Pinned location",
-        "map_click_hint": "Click or drag the pin to set the exact spot.",
-        "severity_label": "Severity",
-        "severity_analyze_button": "Analyze severity from photo",
-        "outage_banner_prefix": "⚠️ Service notice for",
-        "your_parish_label": "Your parish (for outage alerts)",
-        "staff_map_label": "🗺️ Reports map",
-        "staff_map_empty": "No reports with a pinned location yet.",
-        "outage_section_label": "📢 Outage announcements",
-        "outage_parish_label": "Parish / Territory",
-        "outage_message_label": "Message to customers",
-        "outage_start_label": "Start date",
-        "outage_end_label": "End date",
-        "outage_create_button": "Post announcement",
-        "outage_active_label": "Active / upcoming announcements",
-        "outage_none": "No announcements posted.",
-        "outage_delete_button": "Remove",
-    },
+    "welcome": "Welcome to AquaAssist! 💧 I'm here to help with your NAWASA water services.",
+    "tab_chat": "💬 Chat", "tab_faq": "❓ FAQ", "tab_report": "📋 Report & Track",
+    "tab_history": "🕘 History", "tab_settings": "⚙️ Settings",
+    "report_issue": "🚿 Report an issue",
+    "quick_actions": "💧 Quick actions", "ask_placeholder": "Ask AquaAssist something...",
+    "your_name": "Your name", "continue": "Continue",
+    "call_us": "Call Us", "whatsapp_label": "WhatsApp", "chat_now": "Chat now",
+    "website_label": "Website",
+    "qa_report_label": "🚿 Report a Leak", "qa_report_prompt": "I'd like to report a water leak.",
+    "qa_maint_label": "🛠️ Maintenance", "qa_maint_prompt": "Are there any scheduled outages or planned maintenance in my area?",
+    "qa_bill_label": "💳 Pay My Bill", "qa_bill_prompt": "What are my options for paying my NAWASA bill?",
+    "qa_rep_label": "📞 Talk to a Rep", "qa_rep_prompt": "I'd like to speak with a customer service representative.",
+    "settings_preferences": "⚙️ Preferences",
+    "dark_mode": "🌙 Dark mode", "high_contrast": "🔲 High contrast mode", "large_text": "🔠 Larger text",
+    "accessibility_note": "Accessibility: this app supports keyboard navigation and screen readers natively through Streamlit's standard components.",
+    "settings_conversation": "💬 Conversation",
+    "conversation_note": "messages in this session. Go to the History tab to search or clear your conversation.",
+    "field_name": "Your name", "field_phone": "Phone number",
+    "field_location": "Location / address of the issue", "field_description": "Describe the issue",
+    "field_issue_type": "Issue type", "field_attachment": "Attach a photo, video, or document (optional)",
+    "submit_report": "Submit report", "report_form_expander": "Fill out a report — goes straight to NAWASA staff",
+    "track_report_label": "📍 Track a report", "track_report_placeholder": "Enter your reference number (e.g. NW-A1B2C3D)",
+    "get_notified": "🔔 Get notified", "notify_contact_label": "Email or phone number",
+    "notify_categories_label": "Notify me about", "subscribe_button": "Subscribe",
+    "voice_toggle_label": "🔊 Speak replies aloud", "voice_popover_label": "🎤",
+    "voice_help_on": "Uses gTTS to read the bot's replies aloud.", "voice_help_off": "Install gTTS to enable this.",
+    "issue_leak": "Leak", "issue_no_water": "No water supply", "issue_low_pressure": "Low pressure",
+    "issue_billing": "Billing issue", "issue_burst": "Burst main", "issue_hydrant": "Damaged hydrant",
+    "issue_quality": "Water quality concern", "issue_other": "Other",
+    "new_chat": "＋ New chat", "chat_history": "Recent chats", "no_history": "No previous chats yet.",
+    "login_title": "Welcome to AquaAssist", "login_subtitle": "Your smart water support assistant",
+    "login_territory": "Select your NAWASA territory",
+    "login_key": "Google AI Studio API key", "login_key_help": "Get a key at https://aistudio.google.com/",
+    "login_start": "Start chatting",
+    "login_missing": "Please select your territory and enter your API key first.",
+    "map_section_label": "📍 Pin location on map",
+    "map_parish_label": "Parish / Territory",
+    "map_address_label": "Street / Landmark Address",
+    "map_gps_button": "📡 Use My GPS Location",
+    "map_not_installed": "Interactive map isn't installed on this server — add `folium` and `streamlit-folium` to requirements.txt to enable it. Enter your parish and address manually for now.",
+    "map_pinned_caption": "Pinned location",
+    "map_click_hint": "Click or drag the pin to set the exact spot.",
+    "severity_label": "Severity",
+    "severity_analyze_button": "Analyze severity from photo",
+    "outage_banner_prefix": "⚠️ Service notice for",
+    "your_parish_label": "Your parish (for outage alerts)",
+    "staff_map_label": "🗺️ Reports map",
+    "staff_map_empty": "No reports with a pinned location yet.",
+    "outage_section_label": "📢 Outage announcements",
+    "outage_parish_label": "Parish / Territory",
+    "outage_message_label": "Message to customers",
+    "outage_start_label": "Start date",
+    "outage_end_label": "End date",
+    "outage_create_button": "Post announcement",
+    "outage_active_label": "Active / upcoming announcements",
+    "outage_none": "No announcements posted.",
+    "outage_delete_button": "Remove",
+    "limit_session_reached": "You've reached the message limit for this conversation. Please start a new chat, or reach us directly by phone at (473) 440-2155 or WhatsApp.",
+    "limit_daily_reached": "AquaAssist has reached its message limit for today. Please contact NAWASA directly by phone at (473) 440-2155 or WhatsApp, or try again tomorrow.",
 }
 
-
-def translate_ui_text(language, client):
-    """Translates every English UI_TEXT value into `language` in a single
-    Gemini call, preserving emoji/URLs/placeholders and JSON structure.
-    Returns the translated dict, or None on any failure."""
-    import json
-    try:
-        source = UI_TEXT["English"]
-        prompt = (
-            f"Translate the values of this JSON object into {language}. This is the interface text "
-            f"for a water utility customer-support app. Keep the exact same JSON keys and the exact "
-            f"same number of entries — do not add, remove, merge, or rename keys. Preserve emoji, "
-            f"punctuation symbols, URLs, and the example reference code 'NW-A1B2C3D' exactly as-is — "
-            f"only translate the human-readable words. Keep the proper nouns 'NAWASA' and 'AquaAssist' "
-            f"untranslated. Respond with ONLY the translated JSON object, nothing else, no commentary, "
-            f"no markdown code fences:\n\n{json.dumps(source, ensure_ascii=False)}"
-        )
-        response = client.models.generate_content(model=MODEL_NAME, contents=prompt)
-        raw = response.text.strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        translated = json.loads(raw)
-        if isinstance(translated, dict) and set(translated.keys()) == set(source.keys()):
-            return translated
-    except Exception:
-        pass
-    return None
-
-
-def get_ui_dict(language):
-    """Returns the UI_TEXT dict for `language`, auto-translating and caching
-    it via Gemini the first time that language is used this session.
-
-    A failed translation attempt is NOT permanently remembered — it is only
-    rate-limited (so we don't hammer the API on every Streamlit rerun) and a
-    warning is surfaced via st.session_state["ui_translation_warning"] so the
-    caller can show the user why the UI is still in English.
-    """
-    import time
-
-    if not language or language == "English":
-        return UI_TEXT["English"]
-
-    cache = st.session_state.setdefault("ui_translations", {})
-    if language in cache:
-        return cache[language]
-
-    api_key = st.session_state.get("api_key")
-    if not api_key:
-        return UI_TEXT["English"]
-
-    attempts = st.session_state.setdefault("ui_translation_attempts", {})
-    attempt_key = f"{language}::{api_key}"
-    last_try = attempts.get(attempt_key, 0)
-    if time.time() - last_try < 8:
-        return UI_TEXT["English"]
-    attempts[attempt_key] = time.time()
-
-    try:
-        client = genai.Client(api_key=api_key)
-        with st.spinner(f"Translating the interface into {language}..."):
-            translated = translate_ui_text(language, client)
-        if translated:
-            cache[language] = translated
-            st.session_state.pop("ui_translation_warning", None)
-            return translated
-        st.session_state["ui_translation_warning"] = language
-    except Exception:
-        st.session_state["ui_translation_warning"] = language
-
-    return UI_TEXT["English"]
-
-
 def t(key):
-    lang = st.session_state.get("selected_language") or "English"
-    d = get_ui_dict(lang)
-    return d.get(key, UI_TEXT["English"].get(key, key))
+    return UI_TEXT.get(key, key)
 
 # ---------------------------------------------------------------------------
 # Official NAWASA FAQs (pulled from nawasa.gd/nawasa-faqs, customer-facing subset)
@@ -340,41 +289,6 @@ def search_faqs(query, faq_list=None):
         return faq_list
     q = query.lower()
     return [f for f in faq_list if q in f["q"].lower() or q in f["a"].lower() or q in f["category"].lower()]
-
-
-def get_translated_faqs(language, client):
-    """Returns the FAQ list translated into `language`, using Gemini once per
-    language and caching the result in session state so it isn't re-translated
-    on every rerun/click. Falls back to English on any failure."""
-    if language == "English":
-        return FAQS
-
-    cache = st.session_state.setdefault("faq_translations", {})
-    if language in cache:
-        return cache[language]
-
-    import json
-    try:
-        prompt = (
-            f"Translate the 'category', 'q', and 'a' fields of every item in this JSON array into "
-            f"{language}. Keep the exact same JSON array structure and number of items — do not add, "
-            f"remove, merge, or summarize any items, and do not add commentary. Preserve numbers, "
-            f"dollar amounts, and proper nouns like NAWASA as-is. Respond with ONLY the translated "
-            f"JSON array, nothing else:\n\n{json.dumps(FAQS, ensure_ascii=False)}"
-        )
-        response = client.models.generate_content(model=MODEL_NAME, contents=prompt)
-        raw = response.text.strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        translated = json.loads(raw)
-        if isinstance(translated, list) and len(translated) == len(FAQS):
-            cache[language] = translated
-            return translated
-    except Exception:
-        pass
-    return FAQS  # fall back silently to English if translation fails
 
 # ---------------------------------------------------------------------------
 # Brand palette — blue & white only, with dark mode / high contrast swaps.
@@ -438,10 +352,6 @@ background-repeat: no-repeat, repeat-x;
 background-position: top, bottom;
 background-size: 100% 420px, 1200px 200px;
 background-attachment: fixed, fixed;
-}}
-.block-container {{
-padding-top: 2.8rem;
-max-width: 780px;
 }}
 ::-webkit-scrollbar {{
 width: 8px;
@@ -720,33 +630,68 @@ box-sizing: border-box;
 opacity: 0.9;
 }}
 .aqua-login-wrap {{
-max-width: 520px;
+max-width: 460px;
 margin: 0 auto;
+animation: aquaFadeUp 0.4s ease-out;
 }}
-.aqua-login-hero {{
-text-align: center;
-padding: 2.2rem 1rem 1rem 1rem;
+.aqua-login-header {{
+display: flex;
+align-items: center;
+justify-content: space-between;
+gap: 0.6rem;
+padding: 1.6rem 0.5rem 1rem 0.5rem;
 }}
-.aqua-login-hero img {{
-width: 84px;
-height: 84px;
+.aqua-login-header-left, .aqua-login-header-right {{
+flex: 0 0 auto;
+display: flex;
+align-items: center;
+justify-content: center;
+}}
+.aqua-login-header-left img, .aqua-login-header-right img {{
+width: 56px;
+height: 56px;
 border-radius: 50%;
 background: {BRAND_WHITE};
-padding: 6px;
-box-shadow: 0 6px 18px rgba(11, 118, 199, 0.18);
-margin-bottom: 0.8rem;
+padding: 5px;
+box-shadow: 0 4px 14px rgba(11, 118, 199, 0.18);
+object-fit: contain;
+}}
+.aqua-login-drop-fallback {{
+font-size: 2rem;
+}}
+.aqua-login-nawasa-fallback {{
+display: flex;
+align-items: center;
+justify-content: center;
+width: 56px;
+height: 56px;
+border-radius: 50%;
+background: {BRAND_BLUE_DARK};
+color: #FFFFFF;
+font-size: 0.62rem;
+font-weight: 800;
+letter-spacing: 0.03em;
+text-align: center;
+box-shadow: 0 4px 14px rgba(11, 118, 199, 0.18);
+}}
+.aqua-login-header-center {{
+flex: 1 1 auto;
+text-align: center;
 }}
 .aqua-login-title {{
-font-size: 2rem;
+font-size: 1.6rem;
 font-weight: 800;
 color: {BRAND_BLUE_DARK};
 letter-spacing: -0.02em;
+line-height: 1.1;
 }}
 .aqua-login-subtitle {{
-font-size: 1rem;
+font-size: 0.85rem;
 color: {BRAND_BLUE};
 font-weight: 500;
-margin-bottom: 0.5rem;
+}}
+.aqua-login-card {{
+margin-top: 0.3rem;
 }}
 .aqua-mic-btn button {{
 border-radius: 50% !important;
@@ -754,6 +699,31 @@ width: 2.6rem !important;
 height: 2.6rem !important;
 padding: 0 !important;
 font-size: 1.1rem !important;
+}}
+
+/* --- Widget-embed optimization ---------------------------------------- */
+/* This app is designed to be embedded as a compact popup chat widget on
+the NAWASA website (via iframe). These rules hide Streamlit's default
+page chrome and tighten spacing so it reads as a purpose-built widget
+rather than a generic web app. */
+#MainMenu, header[data-testid="stHeader"], footer {{
+visibility: hidden;
+height: 0;
+}}
+.block-container {{
+padding-top: 1.2rem;
+padding-bottom: 1rem;
+max-width: 480px;
+}}
+@media (max-width: 480px) {{
+.block-container {{
+padding-left: 0.6rem;
+padding-right: 0.6rem;
+max-width: 100%;
+}}
+.aqua-hero-title {{
+font-size: 1.4rem;
+}}
 }}
 </style>
 <a href="{WHATSAPP_LINK}" target="_blank" class="whatsapp-float" title="Chat on WhatsApp">💬</a>"""
@@ -763,13 +733,13 @@ st.markdown(CSS_BLOCK, unsafe_allow_html=True)
 # ---------------------------------------------------------------------------
 # System instruction
 # ---------------------------------------------------------------------------
-def build_system_instruction(selected_language):
+def build_system_instruction(territory):
+    territory_whatsapp = TERRITORY_WHATSAPP.get(territory, TERRITORY_WHATSAPP["Grenada"])
     return f"""
-You are AquaAssist, a friendly virtual customer assistant for the National Water and Sewerage Authority (NAWASA) of Grenada.
+You are AquaAssist, a friendly virtual customer assistant for the National Water and Sewerage Authority (NAWASA) of Grenada, serving the {territory} territory.
 
 LANGUAGE RULE:
-The customer has selected "{selected_language}" as their preferred language. Reply in {selected_language} by default, from your very first message.
-However, if the customer types in a different language or dialect than {selected_language} — including English, French, Spanish, or Grenadian Creole/patois — switch immediately to match whatever they actually typed, for that message and going forward, even if it differs from their originally selected language. Do not default to English if the customer used another language or dialect. If a customer switches language mid-conversation, switch with them. If you are unsure which language or dialect was used, ask the customer to confirm rather than guessing.
+Always reply in clear, professional Standard English, regardless of what language or dialect the customer writes in. You must still fully UNDERSTAND Grenadian Creole (patois) if a customer writes in it — correctly interpret their meaning and intent — but your reply itself must always be in Standard English. Never reply in Creole, patois, or any other language, even if asked to.
 
 Use the following facts to answer user questions:
 - Help customers report water leaks by collecting the location and relevant details.
@@ -778,7 +748,7 @@ Use the following facts to answer user questions:
 - Explain the available methods for paying NAWASA bills.
 - Provide NAWASA customer service contact information and transfer users to a representative when requested.
 - If the issue is an emergency, advise the user to contact NAWASA immediately at (473) 440-2155.
-- NAWASA's official contact details: Phone (473) 440-2155, WhatsApp via https://wa.link/rt9dj1 (405-5245 / 459-6064 / 405-9143), Website https://nawasa.gd/. Share these when a customer asks how to reach NAWASA directly.
+- NAWASA's official contact details: Phone (473) 440-2155, WhatsApp via {territory_whatsapp} (this is the number for {territory}), Website https://nawasa.gd/. Share these when a customer asks how to reach NAWASA directly.
 - When a customer describes a specific problem (a leak, no water, low pressure, a billing issue) and gives at least a location, log it immediately using the log_water_report tool — do not tell the customer to fill out a separate form themselves. After logging it, tell the customer their reference number so they can track it, and let them know NAWASA staff will follow up. If you don't have their name or phone number yet, ask for it after logging so staff can reach them, but don't block logging the report on that.
 - If the customer attaches a photo or video of the issue, look at it before calling log_water_report and set the tool's severity argument based on what you actually see (e.g. a small drip is "Low", a steady leak is "Medium", a burst main or flooding is "High"). If there's no photo, leave severity as "Unknown" — never guess severity from text description alone.
 - The "Report a Leak" form, voice messages, and the WhatsApp button are alternative ways to reach NAWASA, but you should always try to log the report yourself first if the customer is describing it in chat.
@@ -957,6 +927,69 @@ def get_active_outages_for_parish(parish):
     return matches.to_dict("records")
 
 # ---------------------------------------------------------------------------
+# Usage tracking — a single-row-per-day counter file backing the daily cap.
+# Best-effort, not perfectly atomic under heavy concurrent writes (a plain
+# CSV isn't built for that), but for a small utility's customer-support
+# volume this is a simple, dependency-free way to put a hard ceiling on
+# total daily AI spend without standing up a real database.
+# ---------------------------------------------------------------------------
+def _ensure_usage_file():
+    os.makedirs(os.path.dirname(USAGE_PATH), exist_ok=True)
+    if not os.path.exists(USAGE_PATH):
+        with open(USAGE_PATH, "w", newline="", encoding="utf-8") as f:
+            csv.writer(f).writerow(["date", "count"])
+
+def _today_str():
+    return datetime.now().strftime("%Y-%m-%d")
+
+def get_daily_usage_count():
+    import pandas as pd
+    _ensure_usage_file()
+    try:
+        df = pd.read_csv(USAGE_PATH)
+    except Exception:
+        return 0
+    today_rows = df[df["date"].astype(str) == _today_str()]
+    return int(today_rows["count"].sum()) if not today_rows.empty else 0
+
+def increment_daily_usage():
+    import pandas as pd
+    _ensure_usage_file()
+    today = _today_str()
+    try:
+        df = pd.read_csv(USAGE_PATH)
+    except Exception:
+        df = pd.DataFrame(columns=["date", "count"])
+    if today in df["date"].astype(str).values:
+        df.loc[df["date"].astype(str) == today, "count"] += 1
+    else:
+        df = pd.concat([df, pd.DataFrame([{"date": today, "count": 1}])], ignore_index=True)
+    # Keep the file small — only the last 30 days of counts are needed.
+    df = df.tail(30)
+    df.to_csv(USAGE_PATH, index=False)
+
+def check_and_record_usage():
+    """Call this immediately before every AI message send. Returns
+    (allowed: bool, reason: str|None). If allowed, also records the usage
+    so the caps stay accurate for the NEXT call."""
+    session_count = st.session_state.get("_session_message_count", 0)
+    if session_count >= SESSION_MESSAGE_LIMIT:
+        return False, "session"
+
+    daily_count = get_daily_usage_count()
+    if daily_count >= DAILY_MESSAGE_LIMIT:
+        return False, "daily"
+
+    st.session_state["_session_message_count"] = session_count + 1
+    increment_daily_usage()
+    return True, None
+
+def usage_limit_message(reason):
+    if reason == "session":
+        return t("limit_session_reached")
+    return t("limit_daily_reached")
+
+# ---------------------------------------------------------------------------
 # Tool the AI can call directly during conversation to log a report
 # ---------------------------------------------------------------------------
 def log_water_report(location: str, issue_type: str, description: str,
@@ -1030,81 +1063,53 @@ def ordered_session_ids():
     return [st.session_state.current_session_id] + ids
 
 # ---------------------------------------------------------------------------
-# LOGIN / WELCOME GATE — first screen on a fresh session
+# LOGIN / WELCOME GATE — first screen on a fresh session.
+# Only two inputs required: territory and API key, per client spec. There is
+# no user-account system (no passwords, no database) — see the note at the
+# top of this file about what "log in" does and doesn't mean here.
 # ---------------------------------------------------------------------------
 if not st.session_state.auth_done:
     st.markdown('<div class="aqua-login-wrap">', unsafe_allow_html=True)
-    logo_tag = f'<img src="data:image/png;base64,{logo_b64}" />' if logo_b64 else "💧"
-    st.markdown(f"""<div class="aqua-login-hero">
-{logo_tag}
+
+    drop_logo_tag = f'<img src="data:image/png;base64,{logo_b64}" />' if logo_b64 else '<span class="aqua-login-drop-fallback">💧</span>'
+    if os.path.exists(NAWASA_LOGO_PATH):
+        with open(NAWASA_LOGO_PATH, "rb") as f:
+            nawasa_logo_b64 = base64.b64encode(f.read()).decode()
+        nawasa_logo_tag = f'<img src="data:image/png;base64,{nawasa_logo_b64}" />'
+    else:
+        # Placeholder until the real NAWASA authority logo file is added at
+        # assets/nawasa_logo.png — see the note at the top of this file.
+        nawasa_logo_tag = '<span class="aqua-login-nawasa-fallback">NAWASA</span>'
+
+    st.markdown(f"""<div class="aqua-login-header">
+<div class="aqua-login-header-left">{drop_logo_tag}</div>
+<div class="aqua-login-header-center">
 <div class="aqua-login-title">AquaAssist</div>
-<div class="aqua-login-subtitle">Your smart water support assistant — NAWASA</div>
+<div class="aqua-login-subtitle">Your smart water support assistant</div>
+</div>
+<div class="aqua-login-header-right">{nawasa_logo_tag}</div>
 </div>""", unsafe_allow_html=True)
 
-    st.markdown('<div class="aqua-card">', unsafe_allow_html=True)
+    st.markdown('<div class="aqua-card aqua-login-card">', unsafe_allow_html=True)
 
-    # --- Language selection ---
-    st.markdown(f"**🌐 {t('login_lang')}**")
-    lang_cols = st.columns(4)
-    for col, lang in zip(lang_cols, PRIMARY_LANGUAGES):
-        with col:
-            active = st.session_state.selected_language == lang
-            if st.button(lang, use_container_width=True, key=f"lang_{lang}",
-                         type="primary" if active else "secondary"):
-                st.session_state.selected_language = lang
-                st.rerun()
-    with st.expander("More languages"):
-        extra = st.selectbox("Search / select a language", [""] + EXTENDED_LANGUAGES,
-                              index=(EXTENDED_LANGUAGES.index(st.session_state.selected_language) + 1)
-                              if st.session_state.selected_language in EXTENDED_LANGUAGES else 0)
-        if extra and extra != st.session_state.selected_language:
-            st.session_state.selected_language = extra
-            st.rerun()
-        st.caption("Don't see your language? Type any language or dialect below.")
-        custom_lang = st.text_input("Any other language", key="login_custom_lang",
-                                     placeholder="e.g. Haitian Creole, Tagalog, Igbo...")
-        if custom_lang.strip() and st.button(f"Use “{custom_lang.strip()}”", key="login_custom_lang_btn"):
-            st.session_state.selected_language = custom_lang.strip()
-            st.rerun()
+    st.session_state.territory = st.selectbox(
+        f"📍 {t('login_territory')}", TERRITORIES,
+        index=TERRITORIES.index(st.session_state.territory) if st.session_state.territory in TERRITORIES else 0,
+    )
 
-    if st.session_state.selected_language:
-        st.caption(f"Selected: **{st.session_state.selected_language}**")
-        if st.session_state.get("ui_translation_warning") == st.session_state.selected_language:
-            st.caption(f"⚠️ Couldn't translate the interface into {st.session_state.selected_language} yet — showing English. Check your API key; this will retry automatically.")
-
-    st.divider()
-
-    # --- API key ---
     st.session_state.api_key = st.text_input(
         f"🔑 {t('login_key')}", value=st.session_state.api_key, type="password",
         help=t("login_key_help"),
     )
-
-    st.divider()
-
-    # --- Guest vs account ---
-    st.markdown(f"**{t('login_choose')}**")
-    login_choice = st.radio(" ", [t("login_guest"), t("login_account")],
-                             label_visibility="collapsed", horizontal=True)
-
-    account_name, account_email = "", ""
-    if login_choice == t("login_account"):
-        account_name = st.text_input(t("login_name"))
-        account_email = st.text_input(t("login_email"))
 
     st.markdown('<div class="aqua-primary-btn">', unsafe_allow_html=True)
     start_clicked = st.button(f"💧 {t('login_start')}", use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
     if start_clicked:
-        if not st.session_state.selected_language or not st.session_state.api_key:
+        if not st.session_state.territory or not st.session_state.api_key:
             st.error(t("login_missing"))
-        elif login_choice == t("login_account") and not account_name:
-            st.error(t("login_name") + " " + ("required" if st.session_state.selected_language == "English" else "*"))
         else:
-            st.session_state.account_mode = "account" if login_choice == t("login_account") else "guest"
-            st.session_state.customer_name = account_name
-            st.session_state.customer_email = account_email
             st.session_state.auth_done = True
             st.rerun()
 
@@ -1154,37 +1159,28 @@ with st.sidebar:
     )
     st.caption(f"📞 {NAWASA_PHONE}")
     st.caption(f"🌐 [nawasa.gd]({NAWASA_WEBSITE})")
-    st.caption(f"🗣️ Language: {st.session_state.selected_language}")
-    st.caption(f"👤 {'Guest' if st.session_state.account_mode == 'guest' else (st.session_state.customer_name or 'Account')}")
+    st.caption(f"📍 Territory: {st.session_state.territory}")
 
-    with st.expander("⚙️ Account & language"):
-        lang_options = PRIMARY_LANGUAGES + EXTENDED_LANGUAGES
-        current_in_list = st.session_state.selected_language in lang_options
-        new_lang = st.selectbox(
-            t("preferred_language"),
-            lang_options + ([st.session_state.selected_language] if not current_in_list else []),
-            index=lang_options.index(st.session_state.selected_language) if current_in_list
-            else len(lang_options),
-            key="sidebar_lang_select",
+    with st.expander("⚙️ Territory & API key"):
+        new_territory = st.selectbox(
+            "NAWASA territory", TERRITORIES,
+            index=TERRITORIES.index(st.session_state.territory) if st.session_state.territory in TERRITORIES else 0,
+            key="sidebar_territory_select",
         )
-        custom_lang = st.text_input("Or type any other language", key="sidebar_custom_lang",
-                                     placeholder="e.g. Haitian Creole, Tagalog, Igbo...")
-        target_lang = custom_lang.strip() if custom_lang.strip() else new_lang
-        if target_lang != st.session_state.selected_language:
-            st.session_state.selected_language = target_lang
+        if new_territory != st.session_state.territory:
+            st.session_state.territory = new_territory
             st.session_state.pop("chat", None)
             st.rerun()
 
-        new_key = st.text_input("Gemini API Key", value=api_key, type="password",
+        new_key = st.text_input("Google AI Studio API key", value=api_key, type="password",
                                  help="Get a key at https://aistudio.google.com/")
         if new_key != api_key:
             st.session_state.api_key = new_key
             st.rerun()
         api_key = st.session_state.api_key
 
-        if st.button("Log out / switch account"):
+        if st.button("Sign out"):
             st.session_state.auth_done = False
-            st.session_state.account_mode = None
             st.rerun()
 
     if st.button("🔄 Reset conversation"):
@@ -1195,7 +1191,7 @@ with st.sidebar:
         st.rerun()
 
     with st.expander("📜 View system instruction"):
-        st.text(build_system_instruction(st.session_state.selected_language))
+        st.text(build_system_instruction(st.session_state.territory))
 
     if HAS_MIC_RECORDER:
         st.caption("🎤 Live mic recording: enabled")
@@ -1246,6 +1242,13 @@ if mode == "🔐 Staff Portal":
     if st.button("Log out"):
         st.session_state.staff_authed = False
         st.rerun()
+
+    daily_used = get_daily_usage_count()
+    usage_pct = daily_used / DAILY_MESSAGE_LIMIT if DAILY_MESSAGE_LIMIT else 0
+    st.caption(f"🤖 AI messages today: {daily_used} / {DAILY_MESSAGE_LIMIT}")
+    st.progress(min(usage_pct, 1.0))
+    if usage_pct >= 0.9:
+        st.warning("Approaching today's AI message limit — customers will be redirected to phone/WhatsApp once it's reached. Adjust DAILY_MESSAGE_LIMIT if this happens often.")
 
     reports_df = load_reports()
 
@@ -1402,16 +1405,16 @@ if st.session_state.get("customer_parish"):
                    f"({outage['start_date']} – {outage['end_date']})")
 
 if not api_key:
-    st.info("👈 Enter your Gemini API key in the sidebar (Account & language) to start chatting.")
+    st.info("👈 Enter your Google AI Studio API key in the sidebar (Territory & API key) to start chatting.")
     st.stop()
 
 # ---------------------------------------------------------------------------
-# Initialize client + chat session (recreated when key, language, or the
+# Initialize client + chat session (recreated when key, territory, or the
 # active chat session changes)
 # ---------------------------------------------------------------------------
 if ("chat" not in st.session_state
         or st.session_state.get("_key_used") != api_key
-        or st.session_state.get("_chat_language") != st.session_state.selected_language
+        or st.session_state.get("_chat_territory") != st.session_state.territory
         or st.session_state.get("_chat_session_ref") != st.session_state.current_session_id):
     try:
         client = genai.Client(api_key=api_key)
@@ -1428,7 +1431,7 @@ if ("chat" not in st.session_state
         chat_kwargs = dict(
             model=MODEL_NAME,
             config=types.GenerateContentConfig(
-                system_instruction=build_system_instruction(st.session_state.selected_language),
+                system_instruction=build_system_instruction(st.session_state.territory),
                 temperature=0.7,
                 tools=[log_water_report],
             ),
@@ -1441,7 +1444,7 @@ if ("chat" not in st.session_state
             st.session_state.chat = client.chats.create(**chat_kwargs)
 
         st.session_state._key_used = api_key
-        st.session_state._chat_language = st.session_state.selected_language
+        st.session_state._chat_territory = st.session_state.territory
         st.session_state._chat_session_ref = st.session_state.current_session_id
     except Exception as e:
         st.error(f"Failed to initialize Gemini client: {e}")
@@ -1542,20 +1545,24 @@ with tab_chat:
             _, audio_bytes, mime_type = user_turn
             st.session_state.messages.append({"role": "user", "content": "🎤 (voice message)"})
 
-            with st.spinner("Listening..."):
-                try:
-                    audio_part = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
-                    bot_response = st.session_state.chat.send_message([
-                        audio_part,
-                        "Please respond to this voice message from a NAWASA customer.",
-                    ])
-                    reply_text = bot_response.text
-                except Exception as e:
-                    reply_text = f"⚠️ Error processing voice message: {e}"
+            allowed, limit_reason = check_and_record_usage()
+            if not allowed:
+                reply_text = usage_limit_message(limit_reason)
+            else:
+                with st.spinner("Listening..."):
+                    try:
+                        audio_part = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
+                        bot_response = st.session_state.chat.send_message([
+                            audio_part,
+                            "Please respond to this voice message from a NAWASA customer.",
+                        ])
+                        reply_text = bot_response.text
+                    except Exception as e:
+                        reply_text = f"⚠️ Error processing voice message: {e}"
 
             reply_audio = None
             if st.session_state.voice_replies:
-                reply_audio = speak_text(reply_text, TTS_LANG_CODES.get(st.session_state.selected_language, "en"))
+                reply_audio = speak_text(reply_text, "en")
 
             st.session_state.messages.append({"role": "assistant", "content": reply_text, "audio": reply_audio})
             st.rerun()
@@ -1583,16 +1590,20 @@ with tab_chat:
                     "attachment_name": attachment_name if uploaded_files else None,
                 })
 
-                with st.spinner("Thinking..."):
-                    try:
-                        bot_response = st.session_state.chat.send_message(message_parts if message_parts else cleaned_input)
-                        reply_text = bot_response.text
-                    except Exception as e:
-                        reply_text = f"⚠️ Error: {e}"
+                allowed, limit_reason = check_and_record_usage()
+                if not allowed:
+                    reply_text = usage_limit_message(limit_reason)
+                else:
+                    with st.spinner("Thinking..."):
+                        try:
+                            bot_response = st.session_state.chat.send_message(message_parts if message_parts else cleaned_input)
+                            reply_text = bot_response.text
+                        except Exception as e:
+                            reply_text = f"⚠️ Error: {e}"
 
                 reply_audio = None
                 if st.session_state.voice_replies:
-                    reply_audio = speak_text(reply_text, TTS_LANG_CODES.get(st.session_state.selected_language, "en"))
+                    reply_audio = speak_text(reply_text, "en")
 
                 st.session_state.messages.append({"role": "assistant", "content": reply_text, "audio": reply_audio})
                 st.rerun()
@@ -1636,15 +1647,8 @@ with tab_faq:
     st.markdown('<div class="aqua-section-label">❓ Frequently Asked Questions</div>', unsafe_allow_html=True)
     st.caption("Sourced from the official NAWASA FAQ page (nawasa.gd).")
 
-    active_faqs = FAQS
-    if st.session_state.selected_language != "English":
-        with st.spinner(f"Loading FAQs in {st.session_state.selected_language}..."):
-            active_faqs = get_translated_faqs(st.session_state.selected_language, st.session_state.client)
-        if active_faqs is FAQS:
-            st.caption(f"⚠️ Couldn't translate FAQs into {st.session_state.selected_language} right now — showing English.")
-
     faq_query = st.text_input("Search FAQs", placeholder="e.g. billing, leak, disconnection...")
-    results = search_faqs(faq_query, active_faqs)
+    results = search_faqs(faq_query, FAQS)
     if not results:
         st.info("No matching FAQ found. Try the Chat tab to ask the AI directly, or contact a representative.")
     else:
@@ -1662,7 +1666,7 @@ with tab_faq:
                 # translation, previously collided on the same widget key
                 # and crashed the app with StreamlitDuplicateElementKey.
                 if HAS_TTS and st.button(f"🔊 Read aloud", key=f"faq_audio_{cat}_{faq_idx}"):
-                    audio = speak_text(f["a"], TTS_LANG_CODES.get(st.session_state.selected_language, "en"))
+                    audio = speak_text(f["a"], "en")
                     if audio:
                         st.audio(audio)
 
@@ -1853,20 +1857,13 @@ with tab_settings:
     st.markdown(f'<div class="aqua-section-label">{t("settings_preferences")}</div>', unsafe_allow_html=True)
     st.markdown('<div class="aqua-card">', unsafe_allow_html=True)
 
-    lang_options = PRIMARY_LANGUAGES + EXTENDED_LANGUAGES
-    current_in_list = st.session_state.selected_language in lang_options
-    new_lang = st.selectbox(
-        t("preferred_language"),
-        lang_options + ([st.session_state.selected_language] if not current_in_list else []),
-        index=lang_options.index(st.session_state.selected_language) if current_in_list
-        else len(lang_options),
-        key="settings_lang_select",
+    new_territory = st.selectbox(
+        "NAWASA territory", TERRITORIES,
+        index=TERRITORIES.index(st.session_state.territory) if st.session_state.territory in TERRITORIES else 0,
+        key="settings_territory_select",
     )
-    custom_lang = st.text_input("Or type any other language", key="settings_custom_lang",
-                                 placeholder="e.g. Haitian Creole, Tagalog, Igbo...")
-    target_lang = custom_lang.strip() if custom_lang.strip() else new_lang
-    if target_lang != st.session_state.selected_language:
-        st.session_state.selected_language = target_lang
+    if new_territory != st.session_state.territory:
+        st.session_state.territory = new_territory
         st.session_state.pop("chat", None)
         st.rerun()
 
