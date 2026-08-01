@@ -82,8 +82,7 @@ Our team is working to get the chatbot back up and running as soon as possible.
 
 <br><br>
 
-<strong>We expect AquaAssist to be restored today by 5:00 PM,
-Hello Nylah and Nasir.</strong>
+<strong>We expect AquaAssist to be restored today by 5:00 PM.</strong>
 
 <br><br>
 
