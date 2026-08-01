@@ -8,13 +8,9 @@ st.set_page_config(
     layout="centered"
 )
 
-# Styling
+# Custom Styling
 st.markdown("""
 <style>
-
-body {
-    background-color: #F4FAFD;
-}
 
 .main {
     background-color: #F4FAFD;
@@ -24,7 +20,7 @@ body {
     text-align: center;
     color: #0072BC;
     font-size: 42px;
-    font-weight: 700;
+    font-weight: bold;
     margin-top: 10px;
 }
 
@@ -32,7 +28,7 @@ body {
     text-align: center;
     color: #005A9C;
     font-size: 25px;
-    font-weight: 600;
+    font-weight: bold;
 }
 
 .message {
@@ -44,7 +40,7 @@ body {
 
 .footer {
     text-align: center;
-    color: #666666;
+    color: gray;
     font-size: 15px;
     margin-top: 35px;
 }
@@ -53,19 +49,35 @@ body {
 """, unsafe_allow_html=True)
 
 
-# Load NAWASA Logo
+# Center NAWASA Logo
 logo_path = Path(__file__).parent / "nawasa_logo.png"
 
 if logo_path.exists():
+
+    st.markdown(
+        """
+        <div style="display: flex; justify-content: center;">
+        """,
+        unsafe_allow_html=True
+    )
+
     st.image(str(logo_path), width=180)
+
+    st.markdown(
+        """
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 else:
-    st.error(
+    st.warning(
         "NAWASA logo not found. Please ensure nawasa_logo.png "
         "is uploaded to the same folder as app.py."
     )
 
 
-# Title
+# AquaAssist Title
 st.markdown(
     '<div class="title">💧 AquaAssist</div>',
     unsafe_allow_html=True
@@ -77,7 +89,7 @@ st.markdown(
 )
 
 
-# Message
+# Main Message
 st.markdown("""
 <div class="message">
 
@@ -86,13 +98,13 @@ Thank you for visiting the
 
 <br><br>
 
-Our team is currently working on improvements and resolving 
-technical issues to provide customers with a better experience.
+Our team is currently making improvements and resolving 
+technical issues to provide customers with the best possible experience.
 
 <br><br>
 
-AquaAssist will soon help NAWASA customers receive faster support,
-information, and assistance through artificial intelligence.
+AquaAssist will soon assist NAWASA customers by providing 
+quick information, support, and guidance through artificial intelligence.
 
 <br><br>
 
@@ -102,14 +114,14 @@ information, and assistance through artificial intelligence.
 """, unsafe_allow_html=True)
 
 
-# Notice box
+# Information Box
 st.info(
     "💧 Thank you for your patience and understanding. "
     "The AquaAssist team is working hard to improve your experience."
 )
 
 
-# Developer credit
+# Footer
 st.markdown("""
 <div class="footer">
 
