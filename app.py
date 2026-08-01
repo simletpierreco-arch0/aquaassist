@@ -1,111 +1,64 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AquaAssist - Under Development</title>
+import streamlit as st
 
+st.set_page_config(
+    page_title="AquaAssist",
+    page_icon="💧",
+    layout="centered"
+)
+
+st.markdown("""
 <style>
-*{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-    font-family:Arial, Helvetica, sans-serif;
+.main {
+    background-color: #F4FAFD;
 }
 
-body{
-    background:linear-gradient(135deg,#F4FAFD,#DFF4FC);
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    height:100vh;
+.title {
+    text-align: center;
+    color: #0072BC;
+    font-size: 42px;
+    font-weight: bold;
 }
 
-.card{
-    width:420px;
-    background:#fff;
-    border-radius:20px;
-    padding:35px;
-    text-align:center;
-    box-shadow:0 15px 35px rgba(0,114,188,.18);
-    border-top:8px solid #0072BC;
+.subtitle {
+    text-align: center;
+    color: #005A9C;
+    font-size: 24px;
 }
 
-.logo{
-    width:120px;
-    margin-bottom:20px;
+.message {
+    text-align: center;
+    font-size: 18px;
+    color: #1F2937;
 }
 
-h1{
-    color:#0072BC;
-    margin-bottom:10px;
-}
-
-h2{
-    color:#005A9C;
-    margin-bottom:18px;
-    font-size:22px;
-}
-
-p{
-    color:#1F2937;
-    line-height:1.7;
-    margin-bottom:15px;
-}
-
-.badge{
-    display:inline-block;
-    background:#00B5E2;
-    color:#fff;
-    padding:10px 18px;
-    border-radius:30px;
-    font-weight:bold;
-    margin:15px 0;
-}
-
-.footer{
-    margin-top:20px;
-    color:#666;
-    font-size:14px;
-}
-
-small{
-    display:block;
-    margin-top:8px;
-    color:#0072BC;
-    font-weight:bold;
+.footer {
+    text-align: center;
+    color: gray;
+    margin-top: 30px;
 }
 </style>
-</head>
+""", unsafe_allow_html=True)
 
-<body>
+# Replace with your logo filename
+st.image("nawasa_logo.png", width=180)
 
-<div class="card">
+st.markdown('<div class="title">AquaAssist</div>', unsafe_allow_html=True)
 
-    <!-- Replace src with your uploaded NAWASA logo -->
-    <img src="nawasa-logo.png" alt="NAWASA Logo" class="logo">
+st.markdown('<div class="subtitle">🚧 Currently Under Development</div>', unsafe_allow_html=True)
 
-    <h1>AquaAssist</h1>
-    <h2>🚧 Currently Under Development</h2>
+st.markdown("""
+<div class="message">
+Thank you for visiting the <strong>NAWASA AquaAssist AI Chatbot</strong>.<br><br>
 
-    <p>
-        Thank you for visiting the <strong>NAWASA AquaAssist AI Chatbot</strong>.
-    </p>
+Our team is currently making improvements and fixing a few technical issues to provide you with the best possible experience.<br><br>
 
-    <p>
-        Our team is currently completing final improvements to provide you with the best possible customer experience.
-    </p>
-
-    <div class="badge">
-        Please check back within the next 24 hours.
-    </div>
-
-    <div class="footer">
-        We appreciate your patience and understanding.
-        <small>Developed by Sub Pod 1 Team</small>
-    </div>
-
+<b>Please check back within the next 24 hours.</b>
 </div>
+""", unsafe_allow_html=True)
 
-</body>
-</html>
+st.info("Thank you for your patience and understanding.")
+
+st.markdown(
+    '<div class="footer"><b>Developed by Sub Pod 1 Team</b></div>',
+    unsafe_allow_html=True
+)
