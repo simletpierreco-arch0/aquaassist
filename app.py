@@ -233,29 +233,28 @@ def get_whatsapp_link():
 # WhatsApp button/link/reference throughout the app.
 WHATSAPP_LINK = get_whatsapp_link()
 
-def set_territory(new_value):
-    """Updates the active territory and reruns.
+def _sync_territory(source_key, other_key):
+    """on_change callback for a territory selectbox.
 
     There are three separate territory pickers in this app (the login
     screen, the sidebar "Territory & API key" expander, and the Settings
-    tab), and the sidebar/settings ones are keyed widgets. A keyed widget
-    persists its OWN value in session_state[key] once rendered — after
-    that, Streamlit ignores the `index=` argument on later reruns and just
-    shows whatever is stored under that key. So if territory only changed
-    the shared `st.session_state.territory` (and the widget that triggered
-    it), a *different* territory selectbox the user hadn't touched yet
-    would keep showing its last-picked value and silently drift out of
-    sync with the one true territory. Writing the new value into every
-    keyed selector's own session_state slot here keeps all three pickers
-    (and everything derived from territory: WhatsApp link, system
-    instruction, Gemini chat session) showing/using the same territory no
-    matter which picker was used to change it.
+    tab), and the sidebar/settings ones are keyed widgets. Writing directly
+    to another widget's session_state[key] from the MAIN script body raises
+    `StreamlitAPIException: ...cannot be modified after the widget...` once
+    that key's widget has already been instantiated earlier in the same
+    run (e.g. the sidebar renders before the Settings tab, so by the time
+    Settings tries to update sidebar_territory_select, it's too late).
+    An on_change callback avoids this: it fires BEFORE the rerun that
+    rebuilds the page, i.e. before either widget has been instantiated for
+    the new run, so it's safe to update both here. This keeps every
+    territory picker (and everything derived from territory: WhatsApp
+    link, system instruction, Gemini chat session) in sync no matter which
+    one was used to change it.
     """
+    new_value = st.session_state[source_key]
     st.session_state.territory = new_value
-    st.session_state["sidebar_territory_select"] = new_value
-    st.session_state["settings_territory_select"] = new_value
+    st.session_state[other_key] = new_value
     st.session_state.pop("chat", None)
-    st.rerun()
 
 # ---------------------------------------------------------------------------
 # Grenada geography — for the report location picker
@@ -1748,13 +1747,13 @@ with st.sidebar:
         st.caption(f"🟠 Offices Closed — reopens {_sidebar_hours['reopens_label']} · Mon–Sat, 8:00 AM – 4:00 PM")
 
     with st.expander("⚙️ Territory & API key"):
-        new_territory = st.selectbox(
+        st.selectbox(
             "NAWASA territory", TERRITORIES,
             index=TERRITORIES.index(st.session_state.territory) if st.session_state.territory in TERRITORIES else 0,
             key="sidebar_territory_select",
+            on_change=_sync_territory,
+            args=("sidebar_territory_select", "settings_territory_select"),
         )
-        if new_territory != st.session_state.territory:
-            set_territory(new_territory)
 
         new_key = st.text_input("Google AI Studio API key", value=api_key, type="password",
                                  help="Get a key at https://aistudio.google.com/")
@@ -2508,13 +2507,13 @@ elif active_tab == "settings":
     st.markdown(f'<div class="aqua-section-label">{t("settings_preferences")}</div>', unsafe_allow_html=True)
     st.markdown('<div class="aqua-card">', unsafe_allow_html=True)
 
-    new_territory = st.selectbox(
+    st.selectbox(
         "NAWASA territory", TERRITORIES,
         index=TERRITORIES.index(st.session_state.territory) if st.session_state.territory in TERRITORIES else 0,
         key="settings_territory_select",
+        on_change=_sync_territory,
+        args=("settings_territory_select", "sidebar_territory_select"),
     )
-    if new_territory != st.session_state.territory:
-        set_territory(new_territory)
 
     new_dark_mode = st.toggle(t("dark_mode"), value=st.session_state.dark_mode, key="settings_dark_mode_toggle")
     new_high_contrast = st.toggle(t("high_contrast"), value=st.session_state.high_contrast, key="settings_high_contrast_toggle")
