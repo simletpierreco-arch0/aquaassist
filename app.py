@@ -233,6 +233,30 @@ def get_whatsapp_link():
 # WhatsApp button/link/reference throughout the app.
 WHATSAPP_LINK = get_whatsapp_link()
 
+def set_territory(new_value):
+    """Updates the active territory and reruns.
+
+    There are three separate territory pickers in this app (the login
+    screen, the sidebar "Territory & API key" expander, and the Settings
+    tab), and the sidebar/settings ones are keyed widgets. A keyed widget
+    persists its OWN value in session_state[key] once rendered — after
+    that, Streamlit ignores the `index=` argument on later reruns and just
+    shows whatever is stored under that key. So if territory only changed
+    the shared `st.session_state.territory` (and the widget that triggered
+    it), a *different* territory selectbox the user hadn't touched yet
+    would keep showing its last-picked value and silently drift out of
+    sync with the one true territory. Writing the new value into every
+    keyed selector's own session_state slot here keeps all three pickers
+    (and everything derived from territory: WhatsApp link, system
+    instruction, Gemini chat session) showing/using the same territory no
+    matter which picker was used to change it.
+    """
+    st.session_state.territory = new_value
+    st.session_state["sidebar_territory_select"] = new_value
+    st.session_state["settings_territory_select"] = new_value
+    st.session_state.pop("chat", None)
+    st.rerun()
+
 # ---------------------------------------------------------------------------
 # Grenada geography — for the report location picker
 # ---------------------------------------------------------------------------
@@ -1730,9 +1754,7 @@ with st.sidebar:
             key="sidebar_territory_select",
         )
         if new_territory != st.session_state.territory:
-            st.session_state.territory = new_territory
-            st.session_state.pop("chat", None)
-            st.rerun()
+            set_territory(new_territory)
 
         new_key = st.text_input("Google AI Studio API key", value=api_key, type="password",
                                  help="Get a key at https://aistudio.google.com/")
@@ -2492,9 +2514,7 @@ elif active_tab == "settings":
         key="settings_territory_select",
     )
     if new_territory != st.session_state.territory:
-        st.session_state.territory = new_territory
-        st.session_state.pop("chat", None)
-        st.rerun()
+        set_territory(new_territory)
 
     new_dark_mode = st.toggle(t("dark_mode"), value=st.session_state.dark_mode, key="settings_dark_mode_toggle")
     new_high_contrast = st.toggle(t("high_contrast"), value=st.session_state.high_contrast, key="settings_high_contrast_toggle")
