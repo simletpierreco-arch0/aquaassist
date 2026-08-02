@@ -272,7 +272,6 @@ UI_TEXT = {
     "qa_rep_label": "👤 Speak to an Agent", "qa_rep_prompt": "I'd like to speak with a customer service representative.",
     "settings_preferences": "⚙️ Preferences",
     "dark_mode": "🌙 Dark mode", "high_contrast": "🔲 High contrast mode", "large_text": "🔠 Larger text",
-    "accessibility_note": "Accessibility: this app supports keyboard navigation and screen readers natively through Streamlit's standard components.",
     "settings_conversation": "💬 Conversation",
     "conversation_note": "messages in this session. Go to the History tab to search or clear your conversation.",
     "field_name": "Your name", "field_phone": "Phone number",
