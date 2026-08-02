@@ -43,6 +43,9 @@ import csv
 import io
 import uuid
 import base64
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -82,6 +85,23 @@ except ImportError:
 NAWASA_PHONE = "(473) 440-2155"
 NAWASA_WEBSITE = "https://nawasa.gd/"
 STAFF_PASSCODE = os.environ.get("STAFF_PASSCODE", "changeme123")
+
+# ---------------------------------------------------------------------------
+# Outbound notification email — the sender account used to auto-send
+# subscriber notifications (outage/maintenance messages, etc.) from the
+# Staff Portal. Sending real email requires an app password for this
+# account (Gmail requires a 16-character "App Password" generated under
+# Google Account -> Security -> 2-Step Verification -> App passwords; a
+# normal Gmail login password will NOT work with smtplib). Set that app
+# password as the NOTIFY_EMAIL_APP_PASSWORD environment variable / Streamlit
+# secret before deploying — it is intentionally never hardcoded here.
+# WhatsApp auto-sending is not wired up yet (coming soon); WhatsApp contacts
+# still use the wa.me deep-link handoff below.
+# ---------------------------------------------------------------------------
+NOTIFY_SENDER_EMAIL = "simletpierre.co@gmail.com"
+NOTIFY_SENDER_PASSWORD = os.environ.get("NOTIFY_EMAIL_APP_PASSWORD", "")
+NOTIFY_SMTP_HOST = "smtp.gmail.com"
+NOTIFY_SMTP_PORT = 587
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -620,6 +640,40 @@ def usage_limit_message(reason):
     if reason == "session":
         return t("limit_session_reached")
     return t("limit_daily_reached")
+
+# ---------------------------------------------------------------------------
+# Outbound notification email sending (real SMTP send via Gmail).
+#
+# NOTIFY_SENDER_EMAIL is the "from" account for every notification sent
+# from the Staff Portal's "Contact subscribers" panel. It authenticates
+# with NOTIFY_SENDER_PASSWORD, which must be a Gmail *App Password* (not
+# the account's normal login password — Gmail's SMTP will reject that for
+# any account with 2-Step Verification on, which Google requires for App
+# Passwords to even be generated). Generate one at:
+#   Google Account -> Security -> 2-Step Verification -> App passwords
+# and set it as the NOTIFY_EMAIL_APP_PASSWORD environment variable /
+# Streamlit secret. Until that's set, send_notification_email() below
+# fails gracefully and the UI falls back to a mailto: link instead.
+# ---------------------------------------------------------------------------
+def send_notification_email(to_address, subject, body):
+    """Sends one plain-text email from NOTIFY_SENDER_EMAIL via Gmail SMTP.
+    Returns (success: bool, error_message: str|None)."""
+    if not NOTIFY_SENDER_PASSWORD:
+        return False, "No app password configured (set NOTIFY_EMAIL_APP_PASSWORD)."
+    try:
+        msg = MIMEMultipart()
+        msg["From"] = NOTIFY_SENDER_EMAIL
+        msg["To"] = to_address
+        msg["Subject"] = subject
+        msg.attach(MIMEText(body, "plain"))
+
+        with smtplib.SMTP(NOTIFY_SMTP_HOST, NOTIFY_SMTP_PORT, timeout=15) as server:
+            server.starttls()
+            server.login(NOTIFY_SENDER_EMAIL, NOTIFY_SENDER_PASSWORD)
+            server.sendmail(NOTIFY_SENDER_EMAIL, [to_address], msg.as_string())
+        return True, None
+    except Exception as e:
+        return False, str(e)
 
 # ---------------------------------------------------------------------------
 # Tool the AI can call directly during conversation to log a report
@@ -1973,15 +2027,19 @@ if mode == "🔐 Staff Portal":
                 st.dataframe(notif_df, use_container_width=True)
 
                 # --- Contact subscribers --------------------------------
-                # There's no SMS/email provider (e.g. Twilio, SendGrid)
-                # wired up in this app, so messages can't be sent
-                # automatically — see the outage-announcements note above.
-                # This instead gets staff to the send action in one click:
-                # a mailto: link for contacts that look like an email, a
-                # wa.me WhatsApp link for contacts that look like a phone
-                # number, plus a copy-paste box of the matching contacts.
+                # Email is now sent automatically via NOTIFY_SENDER_EMAIL
+                # (simletpierre.co@gmail.com) over SMTP — no manual mailto
+                # step required, as long as NOTIFY_EMAIL_APP_PASSWORD is
+                # configured (see send_notification_email() above). If it
+                # isn't configured yet, email falls back to a mailto: link
+                # so staff can still send manually in the meantime.
+                # WhatsApp auto-sending isn't wired up yet (coming soon) —
+                # WhatsApp-looking contacts still get a wa.me deep link.
                 st.markdown(f'<div class="aqua-section-label">📣 Contact subscribers</div>', unsafe_allow_html=True)
-                st.caption("No email/SMS provider is configured, so nothing is sent automatically — use the links below to reach out via your own email or WhatsApp.")
+                if NOTIFY_SENDER_PASSWORD:
+                    st.caption(f"Emails send automatically from **{NOTIFY_SENDER_EMAIL}**. WhatsApp auto-sending is coming soon — use the deep link below for now.")
+                else:
+                    st.caption(f"Set the NOTIFY_EMAIL_APP_PASSWORD secret to send automatically from {NOTIFY_SENDER_EMAIL} — until then, email falls back to a mailto: link. WhatsApp auto-sending is coming soon.")
 
                 category_filter_options = sorted(set(
                     cat.strip() for cats in notif_df["categories"].dropna() for cat in str(cats).split(",") if cat.strip()
@@ -1994,12 +2052,18 @@ if mode == "🔐 Staff Portal":
                 else:
                     filtered_notif = notif_df
 
+                contact_subject = st.text_input(
+                    "Email subject", key="notify_contact_subject",
+                    value="NAWASA Notification",
+                )
                 contact_message = st.text_area(
                     "Message to include", key="notify_contact_message",
                     placeholder="e.g. Planned maintenance in your area this Friday...",
                 )
 
                 import urllib.parse
+                email_contacts = []
+                whatsapp_contacts = []
                 for _, sub_row in filtered_notif.iterrows():
                     contact_value = str(sub_row["contact"]).strip()
                     is_email = "@" in contact_value
@@ -2009,13 +2073,47 @@ if mode == "🔐 Staff Portal":
                         st.write(f"**{contact_value}** — _{sub_row['categories']}_")
                     with contact_col2:
                         if is_email:
-                            mailto_link = f"mailto:{contact_value}?subject=NAWASA%20Notification&body={urllib.parse.quote(contact_message)}"
-                            st.markdown(f"[✉️ Email]({mailto_link})")
+                            email_contacts.append(contact_value)
+                            if st.button("✉️ Send", key=f"send_email_{contact_value}"):
+                                if not contact_message.strip():
+                                    st.error("Enter a message above first.")
+                                elif NOTIFY_SENDER_PASSWORD:
+                                    ok, err = send_notification_email(contact_value, contact_subject, contact_message)
+                                    if ok:
+                                        st.success(f"Sent to {contact_value}.")
+                                    else:
+                                        st.error(f"Couldn't send to {contact_value}: {err}")
+                                else:
+                                    mailto_link = f"mailto:{contact_value}?subject={urllib.parse.quote(contact_subject)}&body={urllib.parse.quote(contact_message)}"
+                                    st.markdown(f"App password not set — [open in mail app]({mailto_link}) instead.")
                         elif digits_only:
+                            whatsapp_contacts.append(contact_value)
                             wa_link = f"https://wa.me/{digits_only}?text={urllib.parse.quote(contact_message)}"
                             st.markdown(f"[💬 WhatsApp]({wa_link})")
                         else:
                             st.caption("—")
+
+                if email_contacts:
+                    st.markdown('<div class="aqua-primary-btn">', unsafe_allow_html=True)
+                    if st.button(f"✉️ Send to all {len(email_contacts)} email subscribers", key="send_all_emails_btn"):
+                        if not contact_message.strip():
+                            st.error("Enter a message above first.")
+                        elif not NOTIFY_SENDER_PASSWORD:
+                            st.error(f"Set the NOTIFY_EMAIL_APP_PASSWORD secret to enable bulk sending from {NOTIFY_SENDER_EMAIL}.")
+                        else:
+                            sent_count, failed = 0, []
+                            with st.spinner(f"Sending from {NOTIFY_SENDER_EMAIL}..."):
+                                for addr in email_contacts:
+                                    ok, err = send_notification_email(addr, contact_subject, contact_message)
+                                    if ok:
+                                        sent_count += 1
+                                    else:
+                                        failed.append((addr, err))
+                            if sent_count:
+                                st.success(f"Sent to {sent_count} subscriber(s).")
+                            if failed:
+                                st.error("Failed for: " + ", ".join(f"{a} ({e})" for a, e in failed))
+                    st.markdown('</div>', unsafe_allow_html=True)
 
                 all_contacts_text = "\n".join(filtered_notif["contact"].astype(str).tolist())
                 st.text_area("All matching contacts (copy into your email or SMS tool)",
@@ -2459,11 +2557,31 @@ elif active_tab == "report":
 
     gps_col, hint_col = st.columns([1, 2])
     with gps_col:
+        # FIX: streamlit_geolocation() is itself a self-contained component
+        # that renders its OWN button and only returns coordinates once the
+        # visitor clicks *that* button (which is what triggers the browser's
+        # location permission prompt). The previous code called it from
+        # inside `if st.button(...)`, which meant: (a) the geolocation
+        # component was never even rendered until our own button was
+        # clicked, so there was nothing for the visitor to click to grant
+        # permission in the first place, and (b) on the very run where our
+        # button *was* clicked, the freshly-rendered geolocation component
+        # hadn't been interacted with yet, so it always returned nothing —
+        # the pin never moved. Rendering it directly (no wrapping button)
+        # lets the visitor click the actual location icon and get real
+        # coordinates back on that same interaction. The equality guard
+        # below stops it from re-triggering `st.rerun()` on every later run
+        # once the location is already set (streamlit_geolocation() keeps
+        # returning its last known value on every rerun, not just once).
         if HAS_GEOLOCATION:
-            if st.button(t("map_gps_button"), key="map_gps_btn", use_container_width=True):
-                coords = streamlit_geolocation()
-                if coords and coords.get("latitude"):
-                    st.session_state.report_pin = {"lat": coords["latitude"], "lng": coords["longitude"]}
+            st.caption(t("map_gps_button"))
+            gps_coords = streamlit_geolocation()
+            if gps_coords and gps_coords.get("latitude") is not None and gps_coords.get("longitude") is not None:
+                new_pin = {"lat": gps_coords["latitude"], "lng": gps_coords["longitude"]}
+                if (round(new_pin["lat"], 6), round(new_pin["lng"], 6)) != (
+                    round(st.session_state.report_pin["lat"], 6), round(st.session_state.report_pin["lng"], 6)
+                ):
+                    st.session_state.report_pin = new_pin
                     st.rerun()
     with hint_col:
         if HAS_MAP:
