@@ -108,8 +108,8 @@ USAGE_PATH = os.path.join("data", "usage.csv")
 
 # ---------------------------------------------------------------------------
 # Business hours — NAWASA Customer Service.
-# Monday–Friday, 8:00 AM–4:00 PM, Grenada local time. Weekends (Saturday and
-# Sunday) are always closed. NAWASA_HOLIDAYS lists official closure dates
+# Monday–Saturday, 8:00 AM–4:00 PM, Grenada local time. 
+# Weekends (Sunday) are always closed. NAWASA_HOLIDAYS lists official closure dates
 # (YYYY-MM-DD) that are also treated as closed even if they fall on a
 # weekday — add/edit this list each year as NAWASA publishes its holiday
 # schedule.
