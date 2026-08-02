@@ -43,7 +43,7 @@ import csv
 import io
 import uuid
 import base64
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
@@ -93,7 +93,7 @@ LOGO_PATH = os.path.join("assets", "aquaassist_logo.png")
 # directory, so the logo still loads correctly no matter where `streamlit
 # run` is launched from. Falls back to a styled text badge if the file
 # isn't present at this path.
-logo_path = Path(__file__).parent / "nawasa_logo.png"
+NAWASA_LOGO_PATH = Path(__file__).parent / "nawasa_logo.png"
 REPORTS_PATH = os.path.join("data", "reports.csv")
 NOTIFY_PATH = os.path.join("data", "notifications.csv")
 OUTAGES_PATH = os.path.join("data", "outages.csv")
@@ -108,10 +108,11 @@ USAGE_PATH = os.path.join("data", "usage.csv")
 
 # ---------------------------------------------------------------------------
 # Business hours — NAWASA Customer Service.
-# Monday–Saturday, 8:00 AM–4:00 PM, Grenada local time. Only Sunday is
-# always closed. NAWASA_HOLIDAYS lists official closure dates (YYYY-MM-DD)
-# that are also treated as closed even if they fall on a business day —
-# add/edit this list each year as NAWASA publishes its holiday schedule.
+# Monday–Friday, 8:00 AM–4:00 PM, Grenada local time. Weekends (Saturday and
+# Sunday) are always closed. NAWASA_HOLIDAYS lists official closure dates
+# (YYYY-MM-DD) that are also treated as closed even if they fall on a
+# weekday — add/edit this list each year as NAWASA publishes its holiday
+# schedule.
 # ---------------------------------------------------------------------------
 BUSINESS_HOURS_START = 8   # 8:00 AM
 BUSINESS_HOURS_END = 16    # 4:00 PM
@@ -119,49 +120,6 @@ NAWASA_HOLIDAYS = [
     # "2026-01-01",  # New Year's Day
     # "2026-12-25",  # Christmas Day
 ]
-# Grenada is on Atlantic Standard Time (UTC-4) year-round — it does not
-# observe daylight saving — so a fixed offset is used rather than a named
-# timezone (this also avoids depending on the host machine having the IANA
-# tzdata package installed, which some minimal server images lack).
-GRENADA_TZ = timezone(timedelta(hours=-4))
-_WEEKDAY_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
-def get_business_hours_status():
-    """Computes whether NAWASA Customer Service is open right now, entirely
-    server-side in Python (using the server clock — reliable on every
-    browser/device, unlike a client-side JS check). Returns a dict with
-    `is_open` plus a human-readable `closed_reason` and `reopens_label` for
-    display when closed."""
-    now = datetime.now(GRENADA_TZ)
-    today_str = now.strftime("%Y-%m-%d")
-    weekday_idx = now.weekday()  # Monday=0 ... Sunday=6
-    is_weekend = weekday_idx == 6  # Sunday only — Saturday is a business day
-    is_holiday = today_str in NAWASA_HOLIDAYS
-    is_open_hour = BUSINESS_HOURS_START <= now.hour < BUSINESS_HOURS_END
-
-    is_open = (not is_weekend) and (not is_holiday) and is_open_hour
-
-    # Figure out the next business day (skipping Sundays/holidays) for the
-    # "reopens" message shown when closed.
-    next_day = now
-    if is_weekend or is_holiday or now.hour >= BUSINESS_HOURS_END:
-        next_day = next_day + timedelta(days=1)
-    while next_day.weekday() == 6 or next_day.strftime("%Y-%m-%d") in NAWASA_HOLIDAYS:
-        next_day = next_day + timedelta(days=1)
-
-    if is_weekend:
-        closed_reason = "It's Sunday"
-    elif is_holiday:
-        closed_reason = "Today is a NAWASA holiday"
-    elif now.hour < BUSINESS_HOURS_START:
-        closed_reason = "We open later this morning"
-    else:
-        closed_reason = "We've closed for the day"
-
-    same_day = next_day.strftime("%Y-%m-%d") == today_str
-    reopens_label = ("today" if same_day else _WEEKDAY_LABELS[next_day.weekday()]) + f" at {BUSINESS_HOURS_START}:00 AM"
-
-    return {"is_open": is_open, "closed_reason": closed_reason, "reopens_label": reopens_label}
 
 # ---------------------------------------------------------------------------
 # Rate limiting / cost control. Two independent caps:
@@ -717,35 +675,32 @@ If a question is unrelated to NAWASA services, politely explain that you can onl
 
 # ---------------------------------------------------------------------------
 # Brand palette — official NAWASA colour system, with dark mode / high
-# contrast swaps. Base (light) values are the deep navy blue from the
-# NAWASA logo (not the lighter cyan used previously):
-#   Primary #0A3D62 (navy) · Hover #072B45 · Accent #1E88C7 (lighter blue highlight)
+# contrast swaps. Base (light) values come straight from the brand brief:
+#   Primary #0072BC · Hover #005A9C · Accent #00B5E2
 #   Background #F4FAFD · Cards #FFFFFF · Text #1F2937
-# If your exact brand hex differs from the logo file, swap the three
-# BRAND_* values below and every gradient/card/button in the app follows.
 # ---------------------------------------------------------------------------
 if st.session_state.high_contrast:
-    BRAND_PRIMARY = "#04263F"
-    BRAND_HOVER = "#021524"
-    BRAND_ACCENT = "#0F5C8C"
+    BRAND_PRIMARY = "#004C99"
+    BRAND_HOVER = "#00335E"
+    BRAND_ACCENT = "#0066CC"
     BRAND_BG = "#FFFFFF"
     BRAND_BG_SOFT = "#F0F0F0"
     BRAND_CARD = "#FFFFFF"
     BRAND_TEXT = "#000000"
 elif st.session_state.dark_mode:
-    BRAND_PRIMARY = "#2E6FA8"
-    BRAND_HOVER = "#3D84C2"
-    BRAND_ACCENT = "#4FB3E8"
-    BRAND_BG = "#0B121C"
-    BRAND_BG_SOFT = "#141E2C"
-    BRAND_CARD = "#141E2C"
+    BRAND_PRIMARY = "#3B9EE8"
+    BRAND_HOVER = "#5FB4F0"
+    BRAND_ACCENT = "#39D3F2"
+    BRAND_BG = "#0E141B"
+    BRAND_BG_SOFT = "#182230"
+    BRAND_CARD = "#182230"
     BRAND_TEXT = "#E8F0FA"
 else:
-    BRAND_PRIMARY = "#0A3D62"
-    BRAND_HOVER = "#072B45"
-    BRAND_ACCENT = "#1E88C7"
+    BRAND_PRIMARY = "#0072BC"
+    BRAND_HOVER = "#005A9C"
+    BRAND_ACCENT = "#00B5E2"
     BRAND_BG = "#F4FAFD"
-    BRAND_BG_SOFT = "#E4F0F7"
+    BRAND_BG_SOFT = "#E4F3FB"
     BRAND_CARD = "#FFFFFF"
     BRAND_TEXT = "#1F2937"
 
@@ -766,8 +721,8 @@ if os.path.exists(LOGO_PATH):
         logo_b64 = base64.b64encode(f.read()).decode()
 
 nawasa_logo_b64 = ""
-if logo_path.exists():
-    with open(logo_path, "rb") as f:
+if NAWASA_LOGO_PATH.exists():
+    with open(NAWASA_LOGO_PATH, "rb") as f:
         nawasa_logo_b64 = base64.b64encode(f.read()).decode()
 
 def nawasa_logo_tag(size_px=56, css_class=""):
@@ -867,110 +822,41 @@ animation: aquaFadeUp 0.35s ease-out;
 }}
 .aqua-hero {{
 position: relative;
-background:
-radial-gradient(circle at 15% 15%, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 40%),
-radial-gradient(circle at 88% 110%, {BRAND_ACCENT}55 0%, rgba(255,255,255,0) 55%),
-linear-gradient(135deg, {BRAND_PRIMARY} 0%, {BRAND_HOVER} 65%, {BRAND_PRIMARY} 100%);
-background-size: 100% 100%, 100% 100%, 200% 200%;
-animation: aquaShimmer 12s ease-in-out infinite;
+background: linear-gradient(120deg, {BRAND_PRIMARY} 0%, {BRAND_ACCENT} 50%, {BRAND_PRIMARY} 100%);
+background-size: 200% 200%;
+animation: aquaShimmer 10s ease-in-out infinite;
 border-radius: 24px 24px 0 0;
-padding: 1.6rem 1.6rem 3.4rem 1.6rem;
+padding: 1.8rem 1.6rem 3.2rem 1.6rem;
 margin-bottom: -1px;
 overflow: hidden;
-box-shadow: inset 0 1px 0 rgba(255,255,255,0.14);
-}}
-.aqua-hero::before {{
-content: "";
-position: absolute;
-inset: 0;
-background-image: radial-gradient(rgba(255,255,255,0.10) 1.4px, transparent 1.4px);
-background-size: 18px 18px;
-opacity: 0.5;
-z-index: 1;
-pointer-events: none;
 }}
 .aqua-hero-content {{
 display: flex;
 align-items: center;
-justify-content: space-between;
 gap: 1rem;
 position: relative;
 z-index: 2;
 animation: aquaFadeUp 0.5s ease-out;
 }}
-.aqua-hero-brand {{
-display: flex;
-align-items: center;
-gap: 0.85rem;
-min-width: 0;
-}}
 .aqua-hero img {{
-width: 60px;
-height: 60px;
+width: 64px;
+height: 64px;
 border-radius: 50%;
 background: #FFFFFF;
 padding: 5px;
-box-shadow: 0 4px 14px rgba(0,0,0,0.22);
-flex-shrink: 0;
-}}
-.aqua-hero-nawasa-badge {{
-width: 52px;
-height: 52px;
-border-radius: 50%;
-background: #FFFFFF;
-display: flex;
-align-items: center;
-justify-content: center;
-box-shadow: 0 4px 14px rgba(0,0,0,0.22);
-flex-shrink: 0;
-overflow: hidden;
-padding: 4px;
-box-sizing: border-box;
-}}
-.aqua-hero-nawasa-badge img {{
-width: 100%;
-height: 100%;
-object-fit: contain;
+box-shadow: 0 4px 14px rgba(0,0,0,0.18);
 }}
 .aqua-hero-title {{
-font-size: 1.7rem;
+font-size: 1.8rem;
 font-weight: 800;
 color: #FFFFFF;
 line-height: 1.15;
 letter-spacing: -0.02em;
 }}
 .aqua-hero-subtitle {{
-font-size: 0.92rem;
-color: rgba(255,255,255,0.9);
+font-size: 0.95rem;
+color: rgba(255,255,255,0.92);
 font-weight: 500;
-}}
-.aqua-hero-status {{
-display: inline-flex;
-align-items: center;
-gap: 0.35rem;
-margin-top: 0.45rem;
-padding: 0.2rem 0.65rem;
-border-radius: 999px;
-font-size: 0.68rem;
-font-weight: 700;
-letter-spacing: 0.02em;
-background: rgba(255,255,255,0.16);
-border: 1px solid rgba(255,255,255,0.28);
-color: #FFFFFF;
-}}
-.aqua-hero-status-dot {{
-width: 7px;
-height: 7px;
-border-radius: 50%;
-flex-shrink: 0;
-}}
-.aqua-hero-status-open .aqua-hero-status-dot {{
-background: #34D399;
-box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.35);
-}}
-.aqua-hero-status-closed .aqua-hero-status-dot {{
-background: #FBBF6B;
-box-shadow: 0 0 0 3px rgba(251, 191, 107, 0.3);
 }}
 .aqua-wave {{
 position: absolute;
@@ -1194,32 +1080,21 @@ width: 100%;
 /* Chat bubbles — clear customer vs. AI distinction */
 [data-testid="stChatMessage"] {{
 border-radius: 18px;
-padding: 0.7rem 0.95rem;
-margin-bottom: 0.7rem;
-box-shadow: 0 2px 10px rgba(10, 61, 98, 0.08);
+padding: 0.6rem 0.85rem;
+margin-bottom: 0.6rem;
+box-shadow: 0 1px 6px rgba(0, 114, 188, 0.07);
 animation: aquaPop 0.28s ease-out;
 border: 1px solid transparent;
-gap: 0.65rem;
-}}
-[data-testid="stChatMessage"] [data-testid="stChatMessageAvatarAssistant"],
-[data-testid="stChatMessage"] [data-testid="stChatMessageAvatarUser"] {{
-box-shadow: 0 0 0 2px {BRAND_CARD}, 0 0 0 3px {BRAND_PRIMARY}33;
 }}
 [data-testid="stChatMessage"]:has(img[alt="assistant avatar"]),
 [data-testid="stChatMessageAvatarAssistant"] ~ div,
 div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {{
-background: linear-gradient(135deg, {BRAND_PRIMARY}14, {BRAND_ACCENT}10);
-border-color: {BRAND_PRIMARY}26;
-border-left: 3px solid {BRAND_PRIMARY};
-border-radius: 6px 18px 18px 18px;
+background: linear-gradient(135deg, {BRAND_PRIMARY}12, {BRAND_ACCENT}12);
+border-color: {BRAND_PRIMARY}22;
 }}
 div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {{
 background: {BRAND_CARD};
 border-color: {BRAND_PRIMARY}18;
-border-right: 3px solid {BRAND_ACCENT};
-border-radius: 18px 6px 18px 18px;
-flex-direction: row-reverse;
-text-align: right;
 }}
 .aqua-typing-dots {{
 display: inline-flex;
@@ -1407,6 +1282,93 @@ padding: 0 !important;
 font-size: 1.1rem !important;
 }}
 
+/* --- Business hours gate modal ----------------------------------------- */
+/* Shown when a customer taps Call or WhatsApp outside NAWASA's posted
+Customer Service hours (Mon–Fri, 8:00 AM–4:00 PM, Grenada local time,
+excluding NAWASA public holidays). See the
+nawasaHoursGate()/nawasaIsBusinessHours() script injected below. */
+.nawasa-hours-overlay {{
+display: none;
+position: fixed;
+inset: 0;
+background: rgba(15, 23, 42, 0.55);
+z-index: 10050;
+align-items: center;
+justify-content: center;
+padding: 1.2rem;
+animation: aquaFadeUp 0.2s ease-out;
+}}
+.nawasa-hours-modal {{
+background: {BRAND_CARD};
+border-radius: 20px;
+max-width: 360px;
+width: 100%;
+padding: 1.5rem 1.4rem 1.3rem 1.4rem;
+box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
+border: 1px solid {BRAND_PRIMARY}22;
+font-family: 'Poppins', 'Inter', sans-serif;
+animation: aquaPop 0.25s ease-out;
+}}
+.nawasa-hours-icon {{
+width: 42px;
+height: 42px;
+border-radius: 12px;
+background: linear-gradient(135deg, {BRAND_PRIMARY}22, {BRAND_ACCENT}22);
+display: flex;
+align-items: center;
+justify-content: center;
+font-size: 1.25rem;
+margin-bottom: 0.7rem;
+}}
+.nawasa-hours-title {{
+font-weight: 800;
+font-size: 1.05rem;
+color: {BRAND_TEXT};
+margin-bottom: 0.35rem;
+}}
+.nawasa-hours-hours {{
+font-weight: 700;
+font-size: 0.85rem;
+color: {BRAND_PRIMARY};
+margin-bottom: 0.55rem;
+}}
+.nawasa-hours-body {{
+font-size: 0.85rem;
+color: {BRAND_TEXT}CC;
+line-height: 1.45;
+margin-bottom: 1.1rem;
+}}
+.nawasa-hours-actions {{
+display: flex;
+gap: 0.6rem;
+}}
+.nawasa-hours-actions button {{
+flex: 1;
+border-radius: 12px;
+padding: 0.6rem 0.7rem;
+font-weight: 700;
+font-size: 0.85rem;
+font-family: 'Poppins', 'Inter', sans-serif;
+cursor: pointer;
+transition: all 0.15s ease-in-out;
+}}
+.nawasa-hours-cancel {{
+background: {BRAND_BG_SOFT};
+color: {BRAND_TEXT};
+border: 1px solid {BRAND_PRIMARY}22;
+}}
+.nawasa-hours-cancel:hover {{
+background: {BRAND_PRIMARY}14;
+}}
+.nawasa-hours-continue {{
+background: {BRAND_PRIMARY};
+color: #FFFFFF;
+border: none;
+}}
+.nawasa-hours-continue:hover {{
+background: {BRAND_HOVER};
+}}
+
 /* --- Widget-embed optimization ---------------------------------------- */
 /* This app is designed to be embedded as a compact popup chat widget on
 the NAWASA website (via iframe). These rules hide Streamlit's default
@@ -1442,7 +1404,67 @@ grid-template-columns: 1fr 1fr;
 }}
 }}
 </style>
-<a href="{WHATSAPP_LINK}" target="_blank" class="whatsapp-float" title="Chat on WhatsApp">💬</a>"""
+<div id="nawasa-hours-overlay" class="nawasa-hours-overlay">
+<div class="nawasa-hours-modal">
+<div class="nawasa-hours-icon">🕐</div>
+<div class="nawasa-hours-title">NAWASA Customer Service is currently closed</div>
+<div class="nawasa-hours-hours">Business Hours: Monday – Friday, 8:00 AM – 4:00 PM</div>
+<div class="nawasa-hours-body">You may still continue to WhatsApp or call us, but please note that you may not receive an immediate response until our office reopens.</div>
+<div class="nawasa-hours-actions">
+<button type="button" class="nawasa-hours-cancel" onclick="nawasaHoursCancel()">Cancel</button>
+<button type="button" class="nawasa-hours-continue" onclick="nawasaHoursContinue()">Continue Anyway</button>
+</div>
+</div>
+</div>
+<script>
+var NAWASA_HOLIDAYS = {[str(d) for d in NAWASA_HOLIDAYS]!r};
+function nawasaIsBusinessHours() {{
+try {{
+var now = new Date();
+var fmt = new Intl.DateTimeFormat('en-CA', {{timeZone: 'America/Grenada', hour12: false, hour: '2-digit', weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit'}});
+var parts = fmt.formatToParts(now);
+var weekday = '', hour = null, isoDate = '';
+var y = '', m = '', d = '';
+parts.forEach(function(p) {{
+if (p.type === 'weekday') {{ weekday = p.value; }}
+if (p.type === 'hour') {{ hour = parseInt(p.value, 10); }}
+if (p.type === 'year') {{ y = p.value; }}
+if (p.type === 'month') {{ m = p.value; }}
+if (p.type === 'day') {{ d = p.value; }}
+}});
+isoDate = y + '-' + m + '-' + d;
+// Weekends (Saturday, Sunday) are always closed.
+if (weekday === 'Sat' || weekday === 'Sun') {{ return false; }}
+// NAWASA public holidays are closed even on a weekday.
+if (NAWASA_HOLIDAYS.indexOf(isoDate) !== -1) {{ return false; }}
+if (hour === null || hour < {BUSINESS_HOURS_START} || hour >= {BUSINESS_HOURS_END}) {{ return false; }}
+return true;
+}} catch (e) {{
+return true; // fail open if the browser can't resolve the timezone
+}}
+}}
+function nawasaHoursGate(event, el) {{
+if (nawasaIsBusinessHours()) {{ return true; }}
+event.preventDefault();
+window.__nawasaPendingHref = el.getAttribute('href');
+window.__nawasaPendingTarget = el.getAttribute('target') || '_self';
+var overlay = document.getElementById('nawasa-hours-overlay');
+if (overlay) {{ overlay.style.display = 'flex'; }}
+return false;
+}}
+function nawasaHoursContinue() {{
+var href = window.__nawasaPendingHref;
+var target = window.__nawasaPendingTarget || '_self';
+var overlay = document.getElementById('nawasa-hours-overlay');
+if (overlay) {{ overlay.style.display = 'none'; }}
+if (href) {{ window.open(href, target); }}
+}}
+function nawasaHoursCancel() {{
+var overlay = document.getElementById('nawasa-hours-overlay');
+if (overlay) {{ overlay.style.display = 'none'; }}
+}}
+</script>
+<a href="{WHATSAPP_LINK}" target="_blank" class="whatsapp-float" title="Chat on WhatsApp" onclick="return nawasaHoursGate(event, this)">💬</a>"""
 
 st.markdown(CSS_BLOCK, unsafe_allow_html=True)
 
@@ -1501,7 +1523,7 @@ with st.sidebar:
     if os.path.exists(LOGO_PATH):
         st.image(LOGO_PATH, use_container_width=True)
     elif nawasa_logo_b64:
-        st.image(str(logo_path), width=90)
+        st.image(str(NAWASA_LOGO_PATH), width=90)
 
     mode = st.radio("View", ["💬 Customer Portal", "🔐 Staff Portal"], label_visibility="collapsed")
 
@@ -1531,17 +1553,13 @@ with st.sidebar:
         st.divider()
 
     st.markdown(
-        f'<a href="{WHATSAPP_LINK}" target="_blank" class="whatsapp-btn">📱 Chat on WhatsApp</a>',
+        f'<a href="{WHATSAPP_LINK}" target="_blank" class="whatsapp-btn" onclick="return nawasaHoursGate(event, this)">📱 Chat on WhatsApp</a>',
         unsafe_allow_html=True,
     )
     st.caption(f"📞 {NAWASA_PHONE}")
     st.caption(f"🌐 [nawasa.gd]({NAWASA_WEBSITE})")
     st.caption(f"📍 Territory: {st.session_state.territory}")
-    _sidebar_hours = get_business_hours_status()
-    if _sidebar_hours["is_open"]:
-        st.caption("🟢 Open now · Mon–Sat, 8:00 AM – 4:00 PM")
-    else:
-        st.caption(f"🟠 Closed — reopens {_sidebar_hours['reopens_label']} · Mon–Sat, 8:00 AM – 4:00 PM")
+    st.caption("🕐 Hours: Mon–Fri, 8:00 AM – 4:00 PM")
 
     with st.expander("⚙️ Territory & API key"):
         new_territory = st.selectbox(
@@ -1816,12 +1834,12 @@ quick_actions = {
 }
 
 contact_row_html = f"""<div class="aqua-contact-row">
-<a href="tel:{NAWASA_PHONE.replace(' ', '').replace('(', '').replace(')', '').replace('-', '')}" class="aqua-contact-card">
+<a href="tel:{NAWASA_PHONE.replace(' ', '').replace('(', '').replace(')', '').replace('-', '')}" class="aqua-contact-card" onclick="return nawasaHoursGate(event, this)">
 <span class="aqua-contact-icon">📞</span>
 <span class="aqua-contact-label">{t('call_us')}</span>
 <span class="aqua-contact-value">{NAWASA_PHONE}</span>
 </a>
-<a href="{WHATSAPP_LINK}" target="_blank" class="aqua-contact-card">
+<a href="{WHATSAPP_LINK}" target="_blank" class="aqua-contact-card" onclick="return nawasaHoursGate(event, this)">
 <span class="aqua-contact-icon">💬</span>
 <span class="aqua-contact-label">{t('whatsapp_label')}</span>
 <span class="aqua-contact-value">{t('chat_now')}</span>
@@ -1841,36 +1859,19 @@ contact_row_html = f"""<div class="aqua-contact-row">
 # ===========================================================================
 st.markdown('<div class="aqua-page">', unsafe_allow_html=True)
 
-hours_status = get_business_hours_status()
-if hours_status["is_open"]:
-    status_pill_html = '<div class="aqua-hero-status aqua-hero-status-open"><span class="aqua-hero-status-dot"></span>Open now</div>'
-else:
-    status_pill_html = f'<div class="aqua-hero-status aqua-hero-status-closed"><span class="aqua-hero-status-dot"></span>Closed — reopens {hours_status["reopens_label"]}</div>'
-
-nawasa_badge_inner = (f'<img src="data:image/png;base64,{nawasa_logo_b64}" />' if nawasa_logo_b64
-                      else '<span style="font-size:0.55rem;font-weight:800;color:{0};text-align:center;">NAWASA</span>'.format(BRAND_HOVER))
-
 chat_hero = f"""<div class="aqua-hero">
 <div class="aqua-hero-content">
-<div class="aqua-hero-brand">
 {logo_html}
 <div>
 <div class="aqua-hero-title">AquaAssist</div>
 <div class="aqua-hero-subtitle">Your Smart Water Support Assistant</div>
-{status_pill_html}
 </div>
-</div>
-<div class="aqua-hero-nawasa-badge">{nawasa_badge_inner}</div>
 </div>
 <svg class="aqua-wave" viewBox="0 0 500 40" preserveAspectRatio="none">
 <path class="aqua-wave-fill" d="M0,20 C150,45 350,-5 500,20 L500,40 L0,40 Z"></path>
 </svg>
 </div>"""
 st.markdown(chat_hero, unsafe_allow_html=True)
-
-if not hours_status["is_open"]:
-    st.info(f"🕐 {hours_status['closed_reason']} — NAWASA Customer Service reopens {hours_status['reopens_label']}. "
-            f"You're welcome to leave a message here, call, or WhatsApp us any time — we'll follow up as soon as we're back.")
 
 NAV_ITEMS = [
     ("chat", t("tab_chat")), ("faq", t("tab_faq")), ("report", t("tab_report")),
@@ -2323,4 +2324,5 @@ elif active_tab == "settings":
     st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown('</div>', unsafe_allow_html=True)  # aqua-page
+
 
