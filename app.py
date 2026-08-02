@@ -1568,20 +1568,24 @@ line-height: 1;
 filter: drop-shadow(0 1px 1px rgba(0,0,0,0.25));
 }}
 
-/* FIX: Streamlit wraps the chat input in a fixed-position "bottom" container
-that has its own solid background (independent of .stApp's gradient). Left
-unstyled, that container shows up as a plain white/cream band behind the
-chat input pill instead of blending into the blue wave theme. Painting the
-same gradient here makes the bottom bar match the rest of the page. */
-[data-testid="stBottom"] {{
-background: {BRAND_BG} !important;
-background-image: linear-gradient(180deg, {BRAND_BG_SOFT} 0%, {BRAND_BG} 100%), url("{_WAVE_BG_SVG}");
-background-repeat: no-repeat, repeat-x;
-background-position: top, bottom;
-background-size: 100% 100%, 1200px 200px;
+/* FIX: Streamlit renders the chat input inside a fixed-position "bottom"
+container that sits OUTSIDE .stApp's own stacking context, sized against
+the raw <html>/<body>. That container (and the page body beneath it) has
+its own solid background independent of .stApp's gradient, so it shows up
+as a plain white/cream band behind the chat input pill instead of blending
+into the blue wave theme. The exact data-testid Streamlit gives this
+container has changed across versions, so a wildcard attribute selector is
+used to catch it regardless (stBottom, stBottomBlockContainer, etc.),
+plus html/body itself as the ultimate fallback layer. */
+html, body {{
+background-color: {BRAND_BG} !important;
 }}
-[data-testid="stBottomBlockContainer"] {{
-background: transparent !important;
+[data-testid*="Bottom"], [class*="bottom"] {{
+background: {BRAND_BG} !important;
+background-image: linear-gradient(180deg, {BRAND_BG_SOFT} 0%, {BRAND_BG} 100%), url("{_WAVE_BG_SVG}") !important;
+background-repeat: no-repeat, repeat-x !important;
+background-position: top, bottom !important;
+background-size: 100% 100%, 1200px 200px !important;
 }}
 
 /* Footer */
