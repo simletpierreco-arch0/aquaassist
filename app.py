@@ -1876,6 +1876,16 @@ if mode == "🔐 Staff Portal":
     else:
         st.metric("Total reports", len(reports_df))
 
+        # --- Status breakdown — quick counts per stage, matching the same
+        # colored legend used on the incident map and the tracker. ---
+        STATUS_EMOJI = {"Received": "🔴", "Assigned": "🟠", "Crew Dispatched": "🟠",
+                         "In Progress": "🔵", "Resolved": "🟢"}
+        status_counts = reports_df["status"].value_counts().to_dict()
+        status_count_cols = st.columns(len(STATUS_STAGES))
+        for scol, stage in zip(status_count_cols, STATUS_STAGES):
+            with scol:
+                st.metric(f"{STATUS_EMOJI.get(stage, '⚪')} {stage}", status_counts.get(stage, 0))
+
         # --- Incident map: every report with a pinned GPS location, color-coded by status ---
         st.markdown(f'<div class="aqua-section-label">{t("staff_map_label")}</div>', unsafe_allow_html=True)
         if HAS_MAP:
@@ -1930,6 +1940,26 @@ if mode == "🔐 Staff Portal":
             edited_df.to_csv(REPORTS_PATH, index=False)
             st.success("Statuses updated.")
 
+        # --- Quick status update — pick one report by reference and move it
+        # to a new stage, without having to find/edit its row in the grid
+        # above. Uses the same colored stage labels as the tracker/map. ---
+        st.markdown('<div class="aqua-section-label">🔄 Update a report status</div>', unsafe_allow_html=True)
+        STATUS_DISPLAY = {s: f"{STATUS_EMOJI.get(s, '⚪')} {s}" for s in STATUS_STAGES}
+        with st.form("quick_status_form"):
+            qs_ref = st.selectbox("Reference number", reports_df["reference"].tolist(), key="quick_status_ref")
+            qs_current = reports_df.loc[reports_df["reference"] == qs_ref, "status"].values
+            qs_current_status = qs_current[0] if len(qs_current) else STATUS_STAGES[0]
+            qs_display_options = [STATUS_DISPLAY[s] for s in STATUS_STAGES]
+            qs_new_display = st.selectbox(
+                "New status", qs_display_options,
+                index=STATUS_STAGES.index(qs_current_status) if qs_current_status in STATUS_STAGES else 0,
+            )
+            if st.form_submit_button("Update status"):
+                qs_new_status = STATUS_STAGES[qs_display_options.index(qs_new_display)]
+                update_report_status(qs_ref, qs_new_status)
+                st.success(f"{qs_ref} updated to {qs_new_display}.")
+                st.rerun()
+
         csv_bytes = reports_df.to_csv(index=False).encode("utf-8")
         st.download_button("⬇️ Download reports as CSV", data=csv_bytes,
                             file_name="nawasa_reports.csv", mime="text/csv")
@@ -1941,6 +1971,55 @@ if mode == "🔐 Staff Portal":
         with st.expander(f"🔔 Notification subscribers ({0 if notif_df is None else len(notif_df)})"):
             if notif_df is not None and not notif_df.empty:
                 st.dataframe(notif_df, use_container_width=True)
+
+                # --- Contact subscribers --------------------------------
+                # There's no SMS/email provider (e.g. Twilio, SendGrid)
+                # wired up in this app, so messages can't be sent
+                # automatically — see the outage-announcements note above.
+                # This instead gets staff to the send action in one click:
+                # a mailto: link for contacts that look like an email, a
+                # wa.me WhatsApp link for contacts that look like a phone
+                # number, plus a copy-paste box of the matching contacts.
+                st.markdown(f'<div class="aqua-section-label">📣 Contact subscribers</div>', unsafe_allow_html=True)
+                st.caption("No email/SMS provider is configured, so nothing is sent automatically — use the links below to reach out via your own email or WhatsApp.")
+
+                category_filter_options = sorted(set(
+                    cat.strip() for cats in notif_df["categories"].dropna() for cat in str(cats).split(",") if cat.strip()
+                ))
+                selected_categories = st.multiselect("Filter by category", category_filter_options, key="notify_contact_category_filter")
+                if selected_categories:
+                    filtered_notif = notif_df[notif_df["categories"].apply(
+                        lambda c: any(cat.strip() in selected_categories for cat in str(c).split(","))
+                    )]
+                else:
+                    filtered_notif = notif_df
+
+                contact_message = st.text_area(
+                    "Message to include", key="notify_contact_message",
+                    placeholder="e.g. Planned maintenance in your area this Friday...",
+                )
+
+                import urllib.parse
+                for _, sub_row in filtered_notif.iterrows():
+                    contact_value = str(sub_row["contact"]).strip()
+                    is_email = "@" in contact_value
+                    digits_only = "".join(ch for ch in contact_value if ch.isdigit())
+                    contact_col1, contact_col2 = st.columns([3, 1])
+                    with contact_col1:
+                        st.write(f"**{contact_value}** — _{sub_row['categories']}_")
+                    with contact_col2:
+                        if is_email:
+                            mailto_link = f"mailto:{contact_value}?subject=NAWASA%20Notification&body={urllib.parse.quote(contact_message)}"
+                            st.markdown(f"[✉️ Email]({mailto_link})")
+                        elif digits_only:
+                            wa_link = f"https://wa.me/{digits_only}?text={urllib.parse.quote(contact_message)}"
+                            st.markdown(f"[💬 WhatsApp]({wa_link})")
+                        else:
+                            st.caption("—")
+
+                all_contacts_text = "\n".join(filtered_notif["contact"].astype(str).tolist())
+                st.text_area("All matching contacts (copy into your email or SMS tool)",
+                              value=all_contacts_text, height=100, key="notify_contacts_copy")
             else:
                 st.caption("No subscribers yet.")
 
