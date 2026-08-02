@@ -93,7 +93,7 @@ LOGO_PATH = os.path.join("assets", "aquaassist_logo.png")
 # directory, so the logo still loads correctly no matter where `streamlit
 # run` is launched from. Falls back to a styled text badge if the file
 # isn't present at this path.
-NAWASA_LOGO_PATH = Path(__file__).parent / "nawasa_logo.png"
+logo_path = Path(__file__).parent / "nawasa_logo.png"
 REPORTS_PATH = os.path.join("data", "reports.csv")
 NOTIFY_PATH = os.path.join("data", "notifications.csv")
 OUTAGES_PATH = os.path.join("data", "outages.csv")
@@ -108,11 +108,10 @@ USAGE_PATH = os.path.join("data", "usage.csv")
 
 # ---------------------------------------------------------------------------
 # Business hours — NAWASA Customer Service.
-# Monday–Saturday, 8:00 AM–4:00 PM, Grenada local time. 
-# Weekends (Sunday) are always closed. NAWASA_HOLIDAYS lists official closure dates
-# (YYYY-MM-DD) that are also treated as closed even if they fall on a
-# weekday — add/edit this list each year as NAWASA publishes its holiday
-# schedule.
+# Monday–Saturday, 8:00 AM–4:00 PM, Grenada local time. Only Sunday is
+# always closed. NAWASA_HOLIDAYS lists official closure dates (YYYY-MM-DD)
+# that are also treated as closed even if they fall on a business day —
+# add/edit this list each year as NAWASA publishes its holiday schedule.
 # ---------------------------------------------------------------------------
 BUSINESS_HOURS_START = 8   # 8:00 AM
 BUSINESS_HOURS_END = 16    # 4:00 PM
@@ -136,22 +135,22 @@ def get_business_hours_status():
     now = datetime.now(GRENADA_TZ)
     today_str = now.strftime("%Y-%m-%d")
     weekday_idx = now.weekday()  # Monday=0 ... Sunday=6
-    is_weekend = weekday_idx >= 5
+    is_weekend = weekday_idx == 6  # Sunday only — Saturday is a business day
     is_holiday = today_str in NAWASA_HOLIDAYS
     is_open_hour = BUSINESS_HOURS_START <= now.hour < BUSINESS_HOURS_END
 
     is_open = (not is_weekend) and (not is_holiday) and is_open_hour
 
-    # Figure out the next business day (skipping weekends/holidays) for the
+    # Figure out the next business day (skipping Sundays/holidays) for the
     # "reopens" message shown when closed.
     next_day = now
     if is_weekend or is_holiday or now.hour >= BUSINESS_HOURS_END:
         next_day = next_day + timedelta(days=1)
-    while next_day.weekday() >= 5 or next_day.strftime("%Y-%m-%d") in NAWASA_HOLIDAYS:
+    while next_day.weekday() == 6 or next_day.strftime("%Y-%m-%d") in NAWASA_HOLIDAYS:
         next_day = next_day + timedelta(days=1)
 
     if is_weekend:
-        closed_reason = "It's the weekend"
+        closed_reason = "It's Sunday"
     elif is_holiday:
         closed_reason = "Today is a NAWASA holiday"
     elif now.hour < BUSINESS_HOURS_START:
@@ -767,8 +766,8 @@ if os.path.exists(LOGO_PATH):
         logo_b64 = base64.b64encode(f.read()).decode()
 
 nawasa_logo_b64 = ""
-if NAWASA_LOGO_PATH.exists():
-    with open(NAWASA_LOGO_PATH, "rb") as f:
+if logo_path.exists():
+    with open(logo_path, "rb") as f:
         nawasa_logo_b64 = base64.b64encode(f.read()).decode()
 
 def nawasa_logo_tag(size_px=56, css_class=""):
@@ -1502,7 +1501,7 @@ with st.sidebar:
     if os.path.exists(LOGO_PATH):
         st.image(LOGO_PATH, use_container_width=True)
     elif nawasa_logo_b64:
-        st.image(str(NAWASA_LOGO_PATH), width=90)
+        st.image(str(logo_path), width=90)
 
     mode = st.radio("View", ["💬 Customer Portal", "🔐 Staff Portal"], label_visibility="collapsed")
 
@@ -1540,9 +1539,9 @@ with st.sidebar:
     st.caption(f"📍 Territory: {st.session_state.territory}")
     _sidebar_hours = get_business_hours_status()
     if _sidebar_hours["is_open"]:
-        st.caption("🟢 Open now · Mon–Fri, 8:00 AM – 4:00 PM")
+        st.caption("🟢 Open now · Mon–Sat, 8:00 AM – 4:00 PM")
     else:
-        st.caption(f"🟠 Closed — reopens {_sidebar_hours['reopens_label']} · Mon–Fri, 8:00 AM – 4:00 PM")
+        st.caption(f"🟠 Closed — reopens {_sidebar_hours['reopens_label']} · Mon–Sat, 8:00 AM – 4:00 PM")
 
     with st.expander("⚙️ Territory & API key"):
         new_territory = st.selectbox(
