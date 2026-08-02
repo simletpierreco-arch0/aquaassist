@@ -2499,7 +2499,6 @@ elif active_tab == "settings":
     st.session_state.dark_mode = st.toggle(t("dark_mode"), value=st.session_state.dark_mode)
     st.session_state.high_contrast = st.toggle(t("high_contrast"), value=st.session_state.high_contrast)
     st.session_state.large_text = st.toggle(t("large_text"), value=st.session_state.large_text)
-    st.caption(t("accessibility_note"))
 
     parish_options = [""] + GRENADA_PARISHES
     current_parish = st.session_state.get("customer_parish", "")
