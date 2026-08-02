@@ -243,35 +243,21 @@ GRENADA_CENTER = (12.1165, -61.6790)
 # all AI replies are always English; the app no longer offers a language
 # picker or auto-translation).
 UI_TEXT = {
-    "welcome": (
-        "👋 **Welcome to AquaAssist**\n\n"
-        "I'm NAWASA's official virtual assistant.\n\n"
-        "I'm available **24 hours a day, 7 days a week** to help answer your questions about NAWASA's services.\n\n"
-        "I can help you with:\n\n"
-        "- 🚰 Water outages\n"
-        "- 📄 Billing\n"
-        "- 📍 New connections\n"
-        "- 👷 Reporting leaks\n"
-        "- 🏢 Office locations\n"
-        "- ❓ Frequently asked questions\n"
-        "- 💬 General customer support\n\n"
-        "**How may I assist you today?**"
-    ),
+    "welcome": "Welcome to AquaAssist! 💧 I'm here to help with your NAWASA water services.",
     "tab_chat": "💬 Chat", "tab_faq": "❓ FAQ", "tab_report": "📋 Report & Track",
     "tab_history": "🕘 History", "tab_settings": "⚙️ Settings",
     "report_issue": "🚿 Report an issue",
-    "quick_actions": "💧 Quick actions", "ask_placeholder": "Ask about your water service...",
+    "quick_actions": "💧 Quick actions", "ask_placeholder": "Ask AquaAssist something...",
     "your_name": "Your name", "continue": "Continue",
     "call_us": "Call Us", "whatsapp_label": "WhatsApp", "chat_now": "Chat now",
     "website_label": "Website",
-    "qa_report_label": "👷 Report a Leak", "qa_report_prompt": "I'd like to report a water leak.",
-    "qa_maint_label": "🚰 Water Supply & Outages", "qa_maint_prompt": "Are there any scheduled outages or planned maintenance in my area?",
+    "qa_report_label": "🚿 Report a Leak", "qa_report_prompt": "I'd like to report a water leak.",
+    "qa_maint_label": "🛠️ Maintenance", "qa_maint_prompt": "Are there any scheduled outages or planned maintenance in my area?",
     "qa_bill_label": "💳 Pay My Bill", "qa_bill_prompt": "What are my options for paying my NAWASA bill?",
-    "qa_checkbill_label": "📄 Check My Bill", "qa_checkbill_prompt": "How can I check my current NAWASA bill balance and consumption?",
-    "qa_locations_label": "📍 Office Locations", "qa_locations_prompt": "Where are NAWASA's office locations?",
-    "qa_rep_label": "👤 Speak to an Agent", "qa_rep_prompt": "I'd like to speak with a customer service representative.",
+    "qa_rep_label": "📞 Talk to a Rep", "qa_rep_prompt": "I'd like to speak with a customer service representative.",
     "settings_preferences": "⚙️ Preferences",
     "dark_mode": "🌙 Dark mode", "high_contrast": "🔲 High contrast mode", "large_text": "🔠 Larger text",
+    "accessibility_note": "Accessibility: this app supports keyboard navigation and screen readers natively through Streamlit's standard components.",
     "settings_conversation": "💬 Conversation",
     "conversation_note": "messages in this session. Go to the History tab to search or clear your conversation.",
     "field_name": "Your name", "field_phone": "Phone number",
@@ -731,46 +717,37 @@ If a question is unrelated to NAWASA services, politely explain that you can onl
 
 # ---------------------------------------------------------------------------
 # Brand palette — official NAWASA colour system, with dark mode / high
-# contrast swaps. Base (light) values follow the official NAWASA brief:
-#   Primary #005A9C · Secondary/Accent #00AEEF · Hover #0077CC
-#   Background #F6FBFF · Cards #FFFFFF · Text #33414F
-# If your exact brand hex differs, swap the BRAND_* values below and every
-# gradient/card/button/bubble in the app follows.
+# contrast swaps. Base (light) values are the deep navy blue from the
+# NAWASA logo (not the lighter cyan used previously):
+#   Primary #0A3D62 (navy) · Hover #072B45 · Accent #1E88C7 (lighter blue highlight)
+#   Background #F4FAFD · Cards #FFFFFF · Text #1F2937
+# If your exact brand hex differs from the logo file, swap the three
+# BRAND_* values below and every gradient/card/button in the app follows.
 # ---------------------------------------------------------------------------
 if st.session_state.high_contrast:
-    BRAND_PRIMARY = "#00385E"
-    BRAND_HOVER = "#00243D"
-    BRAND_ACCENT = "#0077CC"
+    BRAND_PRIMARY = "#04263F"
+    BRAND_HOVER = "#021524"
+    BRAND_ACCENT = "#0F5C8C"
     BRAND_BG = "#FFFFFF"
     BRAND_BG_SOFT = "#F0F0F0"
     BRAND_CARD = "#FFFFFF"
     BRAND_TEXT = "#000000"
 elif st.session_state.dark_mode:
-    BRAND_PRIMARY = "#2E86C6"
-    BRAND_HOVER = "#3D97D9"
-    BRAND_ACCENT = "#00AEEF"
+    BRAND_PRIMARY = "#2E6FA8"
+    BRAND_HOVER = "#3D84C2"
+    BRAND_ACCENT = "#4FB3E8"
     BRAND_BG = "#0B121C"
     BRAND_BG_SOFT = "#141E2C"
     BRAND_CARD = "#141E2C"
     BRAND_TEXT = "#E8F0FA"
 else:
-    BRAND_PRIMARY = "#005A9C"
-    BRAND_HOVER = "#0077CC"
-    BRAND_ACCENT = "#00AEEF"
-    BRAND_BG = "#F6FBFF"
-    BRAND_BG_SOFT = "#EAF6FF"
+    BRAND_PRIMARY = "#0A3D62"
+    BRAND_HOVER = "#072B45"
+    BRAND_ACCENT = "#1E88C7"
+    BRAND_BG = "#F4FAFD"
+    BRAND_BG_SOFT = "#E4F0F7"
     BRAND_CARD = "#FFFFFF"
-    BRAND_TEXT = "#33414F"
-
-# Dedicated chat-bubble colors (spec-exact, independent of dark/high-contrast
-# so the conversation stays legible even if those toggles are on).
-USER_BUBBLE_BG = "#D9F3FF"
-USER_BUBBLE_TEXT = "#003B5C"
-ASSISTANT_BUBBLE_BORDER = "#D6EAF8"
-ASSISTANT_BUBBLE_TEXT = "#3A4550"
-HOURS_BANNER_BG = "#EAF6FF"
-HOURS_BANNER_BORDER = "#B8DDF7"
-HOURS_BANNER_TEXT = "#003B5C"
+    BRAND_TEXT = "#1F2937"
 
 # Kept for any lingering references — old names now alias to the new palette.
 BRAND_BLUE = BRAND_PRIMARY
@@ -855,9 +832,6 @@ background: {BRAND_BG};
 background: {BRAND_PRIMARY}55;
 border-radius: 10px;
 }}
-::-webkit-scrollbar-thumb:hover {{
-background: {BRAND_PRIMARY}88;
-}}
 @keyframes aquaFadeUp {{
 from {{ opacity: 0; transform: translateY(10px); }}
 to {{ opacity: 1; transform: translateY(0); }}
@@ -895,9 +869,10 @@ animation: aquaFadeUp 0.35s ease-out;
 position: relative;
 background:
 radial-gradient(circle at 15% 15%, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 40%),
-radial-gradient(circle at 88% 110%, {BRAND_ACCENT}45 0%, rgba(255,255,255,0) 55%),
-linear-gradient(135deg, {BRAND_PRIMARY} 0%, {BRAND_HOVER} 100%);
-background-size: 100% 100%, 100% 100%, 100% 100%;
+radial-gradient(circle at 88% 110%, {BRAND_ACCENT}55 0%, rgba(255,255,255,0) 55%),
+linear-gradient(135deg, {BRAND_PRIMARY} 0%, {BRAND_HOVER} 65%, {BRAND_PRIMARY} 100%);
+background-size: 100% 100%, 100% 100%, 200% 200%;
+animation: aquaShimmer 12s ease-in-out infinite;
 border-radius: 24px 24px 0 0;
 padding: 1.6rem 1.6rem 3.4rem 1.6rem;
 margin-bottom: -1px;
@@ -1045,17 +1020,16 @@ margin-bottom: 0.5rem;
 flex: 1;
 background: {BRAND_CARD};
 border: 1px solid {BRAND_PRIMARY}22;
-border-radius: 16px;
+border-radius: 14px;
 padding: 0.7rem 0.6rem;
-min-height: 44px;
 text-align: center;
 text-decoration: none !important;
-box-shadow: 0 2px 8px rgba(0, 90, 156, 0.06);
+box-shadow: 0 2px 8px rgba(0, 114, 188, 0.06);
 transition: all 0.18s ease-in-out;
 }}
 .aqua-contact-card:hover {{
 transform: translateY(-3px);
-box-shadow: 0 6px 16px rgba(0, 90, 156, 0.18);
+box-shadow: 0 6px 16px rgba(0, 114, 188, 0.18);
 border-color: {BRAND_ACCENT}88;
 }}
 .aqua-contact-icon {{
@@ -1217,42 +1191,35 @@ line-height: 1.3;
 margin-top: 0.55rem;
 width: 100%;
 }}
-/* Chat bubbles — clear customer vs. AI distinction (spec-exact colors) */
+/* Chat bubbles — clear customer vs. AI distinction */
 [data-testid="stChatMessage"] {{
 border-radius: 18px;
-padding: 0.75rem 1rem;
-margin-bottom: 0.75rem;
-box-shadow: 0 2px 10px rgba(0, 90, 156, 0.07);
-animation: aquaFadeUp 0.3s ease-out;
+padding: 0.7rem 0.95rem;
+margin-bottom: 0.7rem;
+box-shadow: 0 2px 10px rgba(10, 61, 98, 0.08);
+animation: aquaPop 0.28s ease-out;
 border: 1px solid transparent;
 gap: 0.65rem;
-transition: box-shadow 0.15s ease-in-out;
 }}
 [data-testid="stChatMessage"] [data-testid="stChatMessageAvatarAssistant"],
 [data-testid="stChatMessage"] [data-testid="stChatMessageAvatarUser"] {{
-box-shadow: 0 0 0 2px {BRAND_CARD}, 0 0 0 3px {BRAND_PRIMARY}30;
+box-shadow: 0 0 0 2px {BRAND_CARD}, 0 0 0 3px {BRAND_PRIMARY}33;
 }}
 [data-testid="stChatMessage"]:has(img[alt="assistant avatar"]),
 [data-testid="stChatMessageAvatarAssistant"] ~ div,
 div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {{
-background: {BRAND_CARD};
-border: 1px solid {ASSISTANT_BUBBLE_BORDER};
+background: linear-gradient(135deg, {BRAND_PRIMARY}14, {BRAND_ACCENT}10);
+border-color: {BRAND_PRIMARY}26;
+border-left: 3px solid {BRAND_PRIMARY};
 border-radius: 6px 18px 18px 18px;
-color: {ASSISTANT_BUBBLE_TEXT};
-}}
-[data-testid="stChatMessage"]:has(img[alt="assistant avatar"]) p,
-div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) p {{
-color: {ASSISTANT_BUBBLE_TEXT};
 }}
 div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {{
-background: {USER_BUBBLE_BG};
-border: 1px solid {USER_BUBBLE_BG};
+background: {BRAND_CARD};
+border-color: {BRAND_PRIMARY}18;
+border-right: 3px solid {BRAND_ACCENT};
 border-radius: 18px 6px 18px 18px;
 flex-direction: row-reverse;
 text-align: right;
-}}
-div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) p {{
-color: {USER_BUBBLE_TEXT};
 }}
 .aqua-typing-dots {{
 display: inline-flex;
@@ -1268,52 +1235,22 @@ animation: aquaDotBounce 1.2s infinite ease-in-out;
 }}
 .aqua-typing-dots span:nth-child(2) {{ animation-delay: 0.15s; }}
 .aqua-typing-dots span:nth-child(3) {{ animation-delay: 0.3s; }}
-/* Loading state — three animated dots instead of Streamlit's default spinner icon */
-[data-testid="stSpinner"] > div {{
-display: flex;
-align-items: center;
-gap: 0.5rem;
-color: {BRAND_PRIMARY};
-font-weight: 600;
-}}
-[data-testid="stSpinner"] svg {{
-display: none;
-}}
-[data-testid="stSpinner"] > div::before {{
-content: "";
-display: inline-flex;
-width: 34px;
-height: 8px;
-background-image:
-radial-gradient({BRAND_PRIMARY} 40%, transparent 41%),
-radial-gradient({BRAND_PRIMARY} 40%, transparent 41%),
-radial-gradient({BRAND_PRIMARY} 40%, transparent 41%);
-background-size: 8px 8px;
-background-repeat: no-repeat;
-background-position: 0 center, 13px center, 26px center;
-animation: aquaDotBounce 1.2s infinite ease-in-out;
-}}
 div.stButton > button {{
-border-radius: 12px;
-border: 1px solid {BRAND_PRIMARY}30;
+border-radius: 14px;
+border: 1px solid {BRAND_PRIMARY}33;
 background-color: {BRAND_CARD};
-color: {BRAND_PRIMARY};
+color: {BRAND_TEXT};
 font-weight: 600;
-padding: 0.7rem 0.6rem;
-min-height: 44px;
-box-shadow: 0 2px 6px rgba(0, 90, 156, 0.06);
+padding: 0.7rem 0.5rem;
+box-shadow: 0 2px 6px rgba(0, 114, 188, 0.06);
 transition: all 0.18s ease-in-out;
 }}
 div.stButton > button:hover {{
-border-color: {BRAND_HOVER};
-color: {BRAND_HOVER};
+border-color: {BRAND_PRIMARY};
+color: {BRAND_PRIMARY};
 background-color: {BRAND_BG_SOFT};
-box-shadow: 0 6px 16px rgba(0, 90, 156, 0.16);
+box-shadow: 0 4px 12px rgba(0, 114, 188, 0.16);
 transform: translateY(-2px);
-}}
-div.stButton > button:focus-visible {{
-outline: 2px solid {BRAND_ACCENT};
-outline-offset: 2px;
 }}
 div.stButton > button:active {{
 transform: translateY(0px) scale(0.98);
@@ -1464,120 +1401,10 @@ margin-top: 0.3rem;
 }}
 .aqua-mic-btn button {{
 border-radius: 50% !important;
-width: 2.75rem !important;
-height: 2.75rem !important;
-min-height: 2.75rem !important;
+width: 2.6rem !important;
+height: 2.6rem !important;
 padding: 0 !important;
 font-size: 1.1rem !important;
-}}
-
-/* Chat input — larger rounded field, brand focus ring, droplet-accented send button */
-[data-testid="stChatInput"] {{
-border-radius: 20px;
-}}
-[data-testid="stChatInput"] textarea {{
-font-size: 0.95rem;
-padding-top: 0.65rem;
-padding-bottom: 0.65rem;
-}}
-[data-testid="stChatInputContainer"] {{
-border-radius: 20px !important;
-border: 1px solid {BRAND_PRIMARY}30 !important;
-box-shadow: 0 2px 10px rgba(0, 90, 156, 0.06);
-transition: box-shadow 0.15s ease-in-out, border-color 0.15s ease-in-out;
-}}
-[data-testid="stChatInputContainer"]:focus-within {{
-border-color: {BRAND_ACCENT} !important;
-box-shadow: 0 0 0 3px {BRAND_ACCENT}22;
-}}
-button[data-testid="stChatInputSubmitButton"] {{
-background-color: {BRAND_PRIMARY} !important;
-border-radius: 50% !important;
-color: #FFFFFF !important;
-position: relative;
-transition: background-color 0.15s ease-in-out, transform 0.15s ease-in-out;
-}}
-button[data-testid="stChatInputSubmitButton"]:hover {{
-background-color: {BRAND_HOVER} !important;
-transform: scale(1.06);
-}}
-button[data-testid="stChatInputSubmitButton"] svg {{
-fill: #FFFFFF !important;
-}}
-button[data-testid="stChatInputSubmitButton"]::after {{
-content: "💧";
-position: absolute;
-top: -6px;
-right: -4px;
-font-size: 0.6rem;
-line-height: 1;
-filter: drop-shadow(0 1px 1px rgba(0,0,0,0.25));
-}}
-
-/* Footer */
-.aqua-footer {{
-text-align: center;
-font-size: 0.72rem;
-color: {BRAND_TEXT}99;
-padding: 0.9rem 0 0.3rem 0;
-letter-spacing: 0.02em;
-}}
-.aqua-footer strong {{
-color: {BRAND_PRIMARY};
-font-weight: 700;
-}}
-
-/* Business hours banner — shown above the quick-contact buttons; not a chat message */
-.aqua-hours-banner {{
-display: flex;
-align-items: flex-start;
-gap: 0.55rem;
-background: {HOURS_BANNER_BG};
-border: 1px solid {HOURS_BANNER_BORDER};
-border-radius: 14px;
-padding: 0.65rem 0.9rem;
-margin-bottom: 0.85rem;
-color: {HOURS_BANNER_TEXT};
-font-size: 0.8rem;
-line-height: 1.45;
-animation: aquaFadeUp 0.3s ease-out;
-}}
-.aqua-hours-banner-icon {{
-flex-shrink: 0;
-font-size: 0.95rem;
-line-height: 1.4;
-}}
-
-/* Premium quick-action cards. The card (icon/title/desc) and its "Select"
-button are separate Streamlit elements stacked in the same column — visual
-spacing between them is pulled tight so they read as one unit. */
-.aqua-qa-tile {{
-background: {BRAND_CARD};
-border: 1px solid {BRAND_PRIMARY}1f;
-border-radius: 16px 16px 0 0;
-border-bottom: none;
-padding: 0.75rem 0.85rem 0.5rem 0.85rem;
-box-shadow: 0 2px 10px rgba(0, 90, 156, 0.06);
-transition: all 0.15s ease-in-out;
-animation: aquaFadeUp 0.35s ease-out;
-margin-bottom: -0.55rem;
-position: relative;
-z-index: 1;
-}}
-.aqua-qa-tile:hover {{
-box-shadow: 0 8px 20px rgba(0, 90, 156, 0.16);
-border-color: {BRAND_ACCENT}77;
-}}
-.aqua-qa-tile-title {{
-font-weight: 700;
-font-size: 0.85rem;
-color: {BRAND_TEXT};
-margin-bottom: 0.1rem;
-}}
-.aqua-qa-tile-desc {{
-font-size: 0.72rem;
-color: {BRAND_TEXT}99;
-line-height: 1.3;
 }}
 
 /* --- Widget-embed optimization ---------------------------------------- */
@@ -1978,18 +1805,14 @@ if ("chat" not in st.session_state
         st.stop()
 
 quick_actions = {
-    t("qa_report_label"): {"prompt": t("qa_report_prompt"), "icon": "👷",
+    t("qa_report_label"): {"prompt": t("qa_report_prompt"), "icon": "🚿",
                             "desc": "Log a leak, burst main, or drip in seconds."},
-    t("qa_maint_label"): {"prompt": t("qa_maint_prompt"), "icon": "🚰",
-                           "desc": "Check for planned works or outages near you."},
+    t("qa_maint_label"): {"prompt": t("qa_maint_prompt"), "icon": "🛠️",
+                           "desc": "Check for planned works near you."},
     t("qa_bill_label"): {"prompt": t("qa_bill_prompt"), "icon": "💳",
                           "desc": "See how to pay your NAWASA bill."},
-    t("qa_checkbill_label"): {"prompt": t("qa_checkbill_prompt"), "icon": "📄",
-                               "desc": "View your balance and billing details."},
-    t("qa_locations_label"): {"prompt": t("qa_locations_prompt"), "icon": "📍",
-                               "desc": "Find a NAWASA office near you."},
-    t("qa_rep_label"): {"prompt": t("qa_rep_prompt"), "icon": "👤",
-                         "desc": "Get connected to a live representative."},
+    t("qa_rep_label"): {"prompt": t("qa_rep_prompt"), "icon": "📞",
+                         "desc": "Get connected to a representative."},
 }
 
 contact_row_html = f"""<div class="aqua-contact-row">
@@ -2033,7 +1856,7 @@ chat_hero = f"""<div class="aqua-hero">
 {logo_html}
 <div>
 <div class="aqua-hero-title">AquaAssist</div>
-<div class="aqua-hero-subtitle">Official Virtual Assistant</div>
+<div class="aqua-hero-subtitle">Your Smart Water Support Assistant</div>
 {status_pill_html}
 </div>
 </div>
@@ -2044,6 +1867,10 @@ chat_hero = f"""<div class="aqua-hero">
 </svg>
 </div>"""
 st.markdown(chat_hero, unsafe_allow_html=True)
+
+if not hours_status["is_open"]:
+    st.info(f"🕐 {hours_status['closed_reason']} — NAWASA Customer Service reopens {hours_status['reopens_label']}. "
+            f"You're welcome to leave a message here, call, or WhatsApp us any time — we'll follow up as soon as we're back.")
 
 NAV_ITEMS = [
     ("chat", t("tab_chat")), ("faq", t("tab_faq")), ("report", t("tab_report")),
@@ -2072,16 +1899,6 @@ if st.session_state.get("customer_parish") and active_tab == "chat":
 
 # ===================== CHAT =====================
 if active_tab == "chat":
-    if not hours_status["is_open"]:
-        st.markdown(
-            f'<div class="aqua-hours-banner">'
-            f'<span class="aqua-hours-banner-icon">🕒</span>'
-            f'<span><strong>Our Customer Service team has closed for the day and will reopen '
-            f'{hours_status["reopens_label"]}.</strong> AquaAssist remains available 24/7 to answer your questions. '
-            f"You're welcome to leave a message here, call, or WhatsApp us at any time—we'll follow up as soon as our team is back in the office.</span>"
-            f'</div>',
-            unsafe_allow_html=True,
-        )
     st.markdown(contact_row_html, unsafe_allow_html=True)
 
     ASSISTANT_AVATAR = LOGO_PATH if os.path.exists(LOGO_PATH) else "💧"
@@ -2142,23 +1959,12 @@ if active_tab == "chat":
         uploaded_files = []
 
     st.markdown(f'<div class="aqua-section-label">{t("quick_actions")}</div>', unsafe_allow_html=True)
-    qa_items = list(quick_actions.items())
+    qa_cols = st.columns(len(quick_actions))
     queued_prompt = None
-    for row_start in range(0, len(qa_items), 2):
-        row_items = qa_items[row_start:row_start + 2]
-        qa_cols = st.columns(len(row_items))
-        for qa_idx, (col, (label, info)) in enumerate(zip(qa_cols, row_items), start=row_start):
-            with col:
-                title_text = label[len(info["icon"]):].strip() if label.startswith(info["icon"]) else label
-                st.markdown(
-                    f'<div class="aqua-qa-tile">'
-                    f'<div class="aqua-qa-tile-title">{info["icon"]} {title_text}</div>'
-                    f'<div class="aqua-qa-tile-desc">{info["desc"]}</div>'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
-                if st.button("Select", use_container_width=True, key=f"qa_{qa_idx}"):
-                    queued_prompt = info["prompt"]
+    for qa_idx, (col, (label, info)) in enumerate(zip(qa_cols, quick_actions.items())):
+        with col:
+            if st.button(label, use_container_width=True, key=f"qa_{qa_idx}"):
+                queued_prompt = info["prompt"]
 
     user_turn = None
     is_audio_turn = False
@@ -2499,6 +2305,7 @@ elif active_tab == "settings":
     st.session_state.dark_mode = st.toggle(t("dark_mode"), value=st.session_state.dark_mode)
     st.session_state.high_contrast = st.toggle(t("high_contrast"), value=st.session_state.high_contrast)
     st.session_state.large_text = st.toggle(t("large_text"), value=st.session_state.large_text)
+    st.caption(t("accessibility_note"))
 
     parish_options = [""] + GRENADA_PARISHES
     current_parish = st.session_state.get("customer_parish", "")
@@ -2516,6 +2323,4 @@ elif active_tab == "settings":
     st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown('</div>', unsafe_allow_html=True)  # aqua-page
-
-st.markdown('<div class="aqua-footer">Powered by <strong>NAWASA</strong></div>', unsafe_allow_html=True)
 
