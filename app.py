@@ -801,8 +801,12 @@ else:
 # so the conversation stays legible even if those toggles are on).
 USER_BUBBLE_BG = "#D9F3FF"
 USER_BUBBLE_TEXT = "#003B5C"
-ASSISTANT_BUBBLE_BORDER = "#D6EAF8"
-ASSISTANT_BUBBLE_TEXT = "#3A4550"
+ASSISTANT_BUBBLE_BORDER = f"{BRAND_PRIMARY}33"
+# Was hardcoded to a dark gray meant for a white card. In dark mode the
+# assistant bubble background (BRAND_CARD) goes dark too, so a fixed dark
+# text color produced dark-on-dark, unreadable text. Follow BRAND_TEXT
+# instead, which already flips to a light color in dark mode.
+ASSISTANT_BUBBLE_TEXT = BRAND_TEXT
 HOURS_BANNER_BG = "#EAF6FF"
 HOURS_BANNER_BORDER = "#B8DDF7"
 HOURS_BANNER_TEXT = "#003B5C"
@@ -1579,6 +1583,14 @@ used to catch it regardless (stBottom, stBottomBlockContainer, etc.),
 plus html/body itself as the ultimate fallback layer. */
 html, body {{
 background-color: {BRAND_BG} !important;
+}}
+/* Streamlit's own theme drives many native containers off CSS custom
+properties rather than a class Claude can target directly — overriding
+the variables themselves is more robust than chasing every container. */
+:root, .stApp {{
+--background-color: {BRAND_BG} !important;
+--secondary-background-color: {BRAND_BG_SOFT} !important;
+--text-color: {BRAND_TEXT} !important;
 }}
 [data-testid*="Bottom"], [class*="bottom"] {{
 background: {BRAND_BG} !important;
