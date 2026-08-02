@@ -274,7 +274,7 @@ UI_TEXT = {
     "issue_billing": "Billing issue", "issue_burst": "Burst main", "issue_hydrant": "Damaged hydrant",
     "issue_quality": "Water quality concern", "issue_other": "Other",
     "new_chat": "＋ New chat", "chat_history": "Recent chats", "no_history": "No previous chats yet.",
-    "login_title": "Welcome to AquaAssist", "login_subtitle": "Your smart water support assistant",
+    "login_title": "Welcome to AquaAssist", "login_subtitle": "Your Nawasa smart water support assistant",
     "login_territory": "Select your NAWASA territory",
     "login_key": "Google AI Studio API key", "login_key_help": "Get a key at https://aistudio.google.com/",
     "login_start": "Start chatting",
@@ -1461,7 +1461,7 @@ if not st.session_state.auth_done:
 <div class="aqua-login-header-center">
 {nawasa_logo_tag(72)}
 <div class="aqua-login-title">AquaAssist</div>
-<div class="aqua-login-subtitle">Your smart water support assistant</div>
+<div class="aqua-login-subtitle">Your Nawasa smart water support assistant</div>
 </div>
 </div>""", unsafe_allow_html=True)
 
@@ -1856,7 +1856,7 @@ chat_hero = f"""<div class="aqua-hero">
 {logo_html}
 <div>
 <div class="aqua-hero-title">AquaAssist</div>
-<div class="aqua-hero-subtitle">Your Smart Water Support Assistant</div>
+<div class="aqua-hero-subtitle">Your Nawasa Smart Water Support Assistant</div>
 {status_pill_html}
 </div>
 </div>
