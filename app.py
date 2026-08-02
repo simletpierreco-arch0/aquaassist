@@ -1473,6 +1473,26 @@ font-weight: 500;
 .aqua-login-card {{
 margin-top: 0.3rem;
 }}
+.aqua-demo-tag {{
+display: inline-block;
+margin-top: 0.5rem;
+padding: 0.15rem 0.6rem;
+border-radius: 999px;
+font-size: 0.62rem;
+font-weight: 700;
+letter-spacing: 0.03em;
+text-transform: uppercase;
+}}
+.aqua-login-demo-tag {{
+color: {BRAND_PRIMARY};
+background: {BRAND_PRIMARY}14;
+border: 1px solid {BRAND_PRIMARY}30;
+}}
+.aqua-hero-demo-tag {{
+color: #FFFFFF;
+background: rgba(255,255,255,0.16);
+border: 1px solid rgba(255,255,255,0.28);
+}}
 .aqua-mic-btn button {{
 border-radius: 50% !important;
 width: 2.75rem !important;
@@ -1621,6 +1641,7 @@ if not st.session_state.auth_done:
 {nawasa_logo_tag(72)}
 <div class="aqua-login-title">AquaAssist</div>
 <div class="aqua-login-subtitle">Your smart water support assistant</div>
+<div class="aqua-demo-tag aqua-login-demo-tag">Demo - Developed by Sub Pod-1</div>
 </div>
 </div>""", unsafe_allow_html=True)
 
@@ -2021,6 +2042,7 @@ chat_hero = f"""<div class="aqua-hero">
 <div class="aqua-hero-title">AquaAssist</div>
 <div class="aqua-hero-subtitle">Official Virtual Assistant</div>
 {status_pill_html}
+<div class="aqua-demo-tag aqua-hero-demo-tag">Demo - Developed by Sub Pod-1</div>
 </div>
 </div>
 <div class="aqua-hero-nawasa-badge">{nawasa_badge_inner}</div>
