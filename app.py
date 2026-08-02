@@ -130,8 +130,8 @@ def get_business_hours_status():
     """Computes whether NAWASA Customer Service is open right now, entirely
     server-side in Python (using the server clock — reliable on every
     browser/device, unlike a client-side JS check). Returns a dict with
-    `is_open` plus a human-readable `office closed_reason` and `reopens_label` for
-    display when Office closed."""
+    `is_open` plus a human-readable `closed_reason` and `reopens_label` for
+    display when closed."""
     now = datetime.now(GRENADA_TZ)
     today_str = now.strftime("%Y-%m-%d")
     weekday_idx = now.weekday()  # Monday=0 ... Sunday=6
@@ -142,7 +142,7 @@ def get_business_hours_status():
     is_open = (not is_weekend) and (not is_holiday) and is_open_hour
 
     # Figure out the next business day (skipping Sundays/holidays) for the
-    # "reopens" message shown when Office closed.
+    # "reopens" message shown when closed.
     next_day = now
     if is_weekend or is_holiday or now.hour >= BUSINESS_HOURS_END:
         next_day = next_day + timedelta(days=1)
@@ -150,18 +150,18 @@ def get_business_hours_status():
         next_day = next_day + timedelta(days=1)
 
     if is_weekend:
-        Office closed_reason = "It's Sunday"
+        closed_reason = "It's Sunday"
     elif is_holiday:
-        Office closed_reason = "Today is a NAWASA holiday"
+        closed_reason = "Today is a NAWASA holiday"
     elif now.hour < BUSINESS_HOURS_START:
-        Office closed_reason = "We open later this morning"
+        closed_reason = "We open later this morning"
     else:
-        Office closed_reason = "We've closed for the day"
+        closed_reason = "We've closed for the day"
 
     same_day = next_day.strftime("%Y-%m-%d") == today_str
     reopens_label = ("today" if same_day else _WEEKDAY_LABELS[next_day.weekday()]) + f" at {BUSINESS_HOURS_START}:00 AM"
 
-    return {"is_open": is_open, "Office closed_reason": Office closed_reason, "reopens_label": reopens_label}
+    return {"is_open": is_open, "closed_reason": closed_reason, "reopens_label": reopens_label}
 
 # ---------------------------------------------------------------------------
 # Rate limiting / cost control. Two independent caps:
@@ -1845,7 +1845,7 @@ hours_status = get_business_hours_status()
 if hours_status["is_open"]:
     status_pill_html = '<div class="aqua-hero-status aqua-hero-status-open"><span class="aqua-hero-status-dot"></span>Open now</div>'
 else:
-    status_pill_html = f'<div class="aqua-hero-status aqua-hero-status-office closed"><span class="aqua-hero-status-dot"></span>office Closed — reopens {hours_status["reopens_label"]}</div>'
+    status_pill_html = f'<div class="aqua-hero-status aqua-hero-status-closed"><span class="aqua-hero-status-dot"></span>Closed — reopens {hours_status["reopens_label"]}</div>'
 
 nawasa_badge_inner = (f'<img src="data:image/png;base64,{nawasa_logo_b64}" />' if nawasa_logo_b64
                       else '<span style="font-size:0.55rem;font-weight:800;color:{0};text-align:center;">NAWASA</span>'.format(BRAND_HOVER))
@@ -1869,7 +1869,7 @@ chat_hero = f"""<div class="aqua-hero">
 st.markdown(chat_hero, unsafe_allow_html=True)
 
 if not hours_status["is_open"]:
-    st.info(f"🕐 {hours_status['Office closed_reason']} — NAWASA Customer Service reopens {hours_status['reopens_label']}. "
+    st.info(f"🕐 {hours_status['closed_reason']} — NAWASA Customer Service reopens {hours_status['reopens_label']}. "
             f"You're welcome to leave a message here, call, or WhatsApp us any time — we'll follow up as soon as we're back.")
 
 NAV_ITEMS = [
