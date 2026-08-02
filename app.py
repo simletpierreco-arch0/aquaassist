@@ -192,7 +192,10 @@ defaults = {
     "dark_mode": False,
     "high_contrast": False,
     "large_text": False,
-    "voice_replies": False,
+    "voice_replies": HAS_TTS,      # spoken replies are the priority channel — default ON
+                                    # whenever text-to-speech is actually available, so
+                                    # customers get audio without having to discover the
+                                    # toggle first. Falls back to False if gTTS isn't installed.
     "chat_sessions": {},           # id -> {"name": str, "messages": [...]}
     "current_session_id": None,
 }
@@ -627,6 +630,11 @@ def log_water_report(location: str, issue_type: str, description: str,
 # ---------------------------------------------------------------------------
 # Voice helpers — Caribbean-leaning English text-to-speech
 #
+# Spoken audio replies are treated as the PRIORITY channel for this app
+# (see `voice_replies` in session defaults, which defaults to True whenever
+# gTTS is installed) — customers should hear a warm, natural voice without
+# having to discover and flip a toggle first.
+#
 # gTTS (Google Translate TTS) does not offer a dedicated "Grenadian" or
 # "Caribbean English" voice model — its `lang`/`tld` options only select
 # from Google's existing regional English accents. There is no tld that
@@ -639,6 +647,8 @@ def log_water_report(location: str, issue_type: str, description: str,
 #      gTTS exposes; not Grenadian, but the nearest available approximation)
 #   2. en / tld=co.uk   — a neutral, warm Standard English fallback
 #   3. en / tld=us      — final fallback if the above are unreachable
+# Normal (non-slow) playback speed is used throughout so the voice sounds
+# natural and conversational rather than a robotic read-aloud.
 # If a fully Caribbean/Grenadian voice becomes available through whichever
 # speech provider is ultimately selected for production (e.g. a premium
 # TTS API with regional accent packs), swap the implementation here.
@@ -655,7 +665,7 @@ def speak_text(text, lang_code="en"):
     for accent in VOICE_ACCENT_CHAIN:
         try:
             buf = io.BytesIO()
-            gTTS(text=text, lang=lang_code, tld=accent["tld"]).write_to_fp(buf)
+            gTTS(text=text, lang=lang_code, tld=accent["tld"], slow=False).write_to_fp(buf)
             buf.seek(0)
             return buf.read()
         except Exception:
@@ -713,6 +723,7 @@ Sound like an experienced, caring NAWASA customer service representative — not
 - Keep track of what's already been said in the conversation and don't ask the customer to repeat information they've already given you.
 - When a customer reports a problem — no water, a leak, a burst main, a billing concern — show empathy first: acknowledge how frustrating or inconvenient it is, reassure them you're there to help, and then guide them calmly through the next steps.
 - Keep responses concise, clear, and easy to understand, while still sounding like a real person who cares about getting the customer's problem solved.
+- Your replies are frequently read aloud by text-to-speech, so favor calm, warm, empathetic phrasing that sounds natural when spoken — short sentences, plain punctuation, and a reassuring tone throughout.
 
 Use the following facts to answer user questions:
 - Help customers report water leaks by collecting the location and relevant details.
@@ -1689,7 +1700,7 @@ with st.sidebar:
     if _sidebar_hours["is_open"]:
         st.caption("🟢 Open now · Mon–Sat, 8:00 AM – 4:00 PM")
     else:
-        st.caption(f"🟠 Closed — reopens {_sidebar_hours['reopens_label']} · Mon–Sat, 8:00 AM – 4:00 PM")
+        st.caption(f"🟠 Offices Closed — reopens {_sidebar_hours['reopens_label']} · Mon–Sat, 8:00 AM – 4:00 PM")
 
     with st.expander("⚙️ Territory & API key"):
         new_territory = st.selectbox(
@@ -1736,7 +1747,7 @@ with st.sidebar:
     else:
         st.caption("🗺️ Interactive Grenada map: not installed (manual lat/lng entry still works)")
     if HAS_TTS:
-        st.caption("🔊 Voice replies: enabled (Caribbean-leaning voice, Standard English fallback)")
+        st.caption("🔊 Voice replies: enabled by default (Caribbean-leaning voice, Standard English fallback)")
     else:
         st.caption("🔊 Voice replies: not installed (add `gtts` to requirements.txt to enable)")
 
@@ -1997,7 +2008,7 @@ hours_status = get_business_hours_status()
 if hours_status["is_open"]:
     status_pill_html = '<div class="aqua-hero-status aqua-hero-status-open"><span class="aqua-hero-status-dot"></span>Open now</div>'
 else:
-    status_pill_html = f'<div class="aqua-hero-status aqua-hero-status-closed"><span class="aqua-hero-status-dot"></span>Closed — reopens {hours_status["reopens_label"]}</div>'
+    status_pill_html = f'<div class="aqua-hero-status aqua-hero-status-closed"><span class="aqua-hero-status-dot"></span>Offices Closed — reopens {hours_status["reopens_label"]}</div>'
 
 nawasa_badge_inner = (f'<img src="data:image/png;base64,{nawasa_logo_b64}" />' if nawasa_logo_b64
                       else '<span style="font-size:0.55rem;font-weight:800;color:{0};text-align:center;">NAWASA</span>'.format(BRAND_HOVER))
@@ -2463,18 +2474,38 @@ elif active_tab == "settings":
         st.session_state.pop("chat", None)
         st.rerun()
 
-    st.session_state.dark_mode = st.toggle(t("dark_mode"), value=st.session_state.dark_mode)
-    st.session_state.high_contrast = st.toggle(t("high_contrast"), value=st.session_state.high_contrast)
-    st.session_state.large_text = st.toggle(t("large_text"), value=st.session_state.large_text)
+    new_dark_mode = st.toggle(t("dark_mode"), value=st.session_state.dark_mode, key="settings_dark_mode_toggle")
+    new_high_contrast = st.toggle(t("high_contrast"), value=st.session_state.high_contrast, key="settings_high_contrast_toggle")
+    new_large_text = st.toggle(t("large_text"), value=st.session_state.large_text, key="settings_large_text_toggle")
     st.caption(t("accessibility_note"))
 
     parish_options = [""] + GRENADA_PARISHES
     current_parish = st.session_state.get("customer_parish", "")
-    st.session_state.customer_parish = st.selectbox(
+    new_parish = st.selectbox(
         t("your_parish_label"), parish_options,
         index=parish_options.index(current_parish) if current_parish in parish_options else 0,
         key="settings_customer_parish",
     )
+
+    # These values feed BRAND_* / BASE_FONT_SIZE in the CSS block computed
+    # near the top of the script — that computation already happened earlier
+    # in THIS run, using the values from before this widget block executed.
+    # Without an explicit rerun here, a change wouldn't actually take visual
+    # effect until some unrelated later interaction triggered the next run.
+    # Rerunning immediately makes dark mode / high contrast / large text /
+    # parish selection apply the moment the customer toggles them.
+    settings_changed = (
+        new_dark_mode != st.session_state.dark_mode
+        or new_high_contrast != st.session_state.high_contrast
+        or new_large_text != st.session_state.large_text
+        or new_parish != current_parish
+    )
+    st.session_state.dark_mode = new_dark_mode
+    st.session_state.high_contrast = new_high_contrast
+    st.session_state.large_text = new_large_text
+    st.session_state.customer_parish = new_parish
+    if settings_changed:
+        st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
 
