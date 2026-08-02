@@ -272,7 +272,6 @@ UI_TEXT = {
     "qa_rep_label": "👤 Speak to an Agent", "qa_rep_prompt": "I'd like to speak with a customer service representative.",
     "settings_preferences": "⚙️ Preferences",
     "dark_mode": "🌙 Dark mode", "high_contrast": "🔲 High contrast mode", "large_text": "🔠 Larger text",
-    "accessibility_note": "Accessibility: this app supports keyboard navigation and screen readers natively through Streamlit's standard components.",
     "settings_conversation": "💬 Conversation",
     "conversation_note": "messages in this session. Go to the History tab to search or clear your conversation.",
     "field_name": "Your name", "field_phone": "Phone number",
@@ -831,7 +830,8 @@ _RIPPLE_BG_SVG = (
 # literal code block and refuses to render it as HTML, even with
 # unsafe_allow_html=True — keep every line here starting at column 0).
 # ---------------------------------------------------------------------------
-CSS_BLOCK = f"""<style>
+CSS_BLOCK = f"""<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
 html, body, [class*="css"] {{
 font-family: 'Poppins', 'Inter', sans-serif;
 font-size: {BASE_FONT_SIZE};
@@ -1548,6 +1548,38 @@ font-size: 0.95rem;
 line-height: 1.4;
 }}
 
+/* Premium quick-action cards. The card (icon/title/desc) and its "Select"
+button are separate Streamlit elements stacked in the same column — visual
+spacing between them is pulled tight so they read as one unit. */
+.aqua-qa-tile {{
+background: {BRAND_CARD};
+border: 1px solid {BRAND_PRIMARY}1f;
+border-radius: 16px 16px 0 0;
+border-bottom: none;
+padding: 0.75rem 0.85rem 0.5rem 0.85rem;
+box-shadow: 0 2px 10px rgba(0, 90, 156, 0.06);
+transition: all 0.15s ease-in-out;
+animation: aquaFadeUp 0.35s ease-out;
+margin-bottom: -0.55rem;
+position: relative;
+z-index: 1;
+}}
+.aqua-qa-tile:hover {{
+box-shadow: 0 8px 20px rgba(0, 90, 156, 0.16);
+border-color: {BRAND_ACCENT}77;
+}}
+.aqua-qa-tile-title {{
+font-weight: 700;
+font-size: 0.85rem;
+color: {BRAND_TEXT};
+margin-bottom: 0.1rem;
+}}
+.aqua-qa-tile-desc {{
+font-size: 0.72rem;
+color: {BRAND_TEXT}99;
+line-height: 1.3;
+}}
+
 /* --- Widget-embed optimization ---------------------------------------- */
 /* This app is designed to be embedded as a compact popup chat widget on
 the NAWASA website (via iframe). These rules hide Streamlit's default
@@ -1582,17 +1614,10 @@ font-size: 1.4rem;
 grid-template-columns: 1fr 1fr;
 }}
 }}
-</style>"""
+</style>
+<a href="{WHATSAPP_LINK}" target="_blank" class="whatsapp-float" title="Chat on WhatsApp">💬</a>"""
 
-st.markdown(
-    '<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">',
-    unsafe_allow_html=True,
-)
 st.markdown(CSS_BLOCK, unsafe_allow_html=True)
-st.markdown(
-    f'<div class="whatsapp-float-wrap"><a href="{WHATSAPP_LINK}" target="_blank" class="whatsapp-float" title="Chat on WhatsApp">💬</a></div>',
-    unsafe_allow_html=True,
-)
 
 # ---------------------------------------------------------------------------
 # LOGIN / WELCOME GATE — first screen on a fresh session.
@@ -2124,7 +2149,15 @@ if active_tab == "chat":
         qa_cols = st.columns(len(row_items))
         for qa_idx, (col, (label, info)) in enumerate(zip(qa_cols, row_items), start=row_start):
             with col:
-                if st.button(label, use_container_width=True, key=f"qa_{qa_idx}", help=info["desc"]):
+                title_text = label[len(info["icon"]):].strip() if label.startswith(info["icon"]) else label
+                st.markdown(
+                    f'<div class="aqua-qa-tile">'
+                    f'<div class="aqua-qa-tile-title">{info["icon"]} {title_text}</div>'
+                    f'<div class="aqua-qa-tile-desc">{info["desc"]}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+                if st.button("Select", use_container_width=True, key=f"qa_{qa_idx}"):
                     queued_prompt = info["prompt"]
 
     user_turn = None
@@ -2466,7 +2499,6 @@ elif active_tab == "settings":
     st.session_state.dark_mode = st.toggle(t("dark_mode"), value=st.session_state.dark_mode)
     st.session_state.high_contrast = st.toggle(t("high_contrast"), value=st.session_state.high_contrast)
     st.session_state.large_text = st.toggle(t("large_text"), value=st.session_state.large_text)
-    st.caption(t("accessibility_note"))
 
     parish_options = [""] + GRENADA_PARISHES
     current_parish = st.session_state.get("customer_parish", "")
@@ -2486,3 +2518,4 @@ elif active_tab == "settings":
 st.markdown('</div>', unsafe_allow_html=True)  # aqua-page
 
 st.markdown('<div class="aqua-footer">Powered by <strong>NAWASA</strong></div>', unsafe_allow_html=True)
+
