@@ -2486,5 +2486,3 @@ elif active_tab == "settings":
 st.markdown('</div>', unsafe_allow_html=True)  # aqua-page
 
 st.markdown('<div class="aqua-footer">Powered by <strong>NAWASA</strong></div>', unsafe_allow_html=True)
-
-
