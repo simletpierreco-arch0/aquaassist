@@ -2533,6 +2533,18 @@ elif active_tab == "report":
                     st.session_state.report_pin = new_pin
                     st.session_state["_last_gps_pin"] = new_pin
                     st.rerun()
+            elif gps_coords and gps_coords.get("latitude") is None:
+                # The component returned SOMETHING but no coordinates — this
+                # is almost always the browser denying/blocking location
+                # rather than a bug in this code, so surface whatever the
+                # browser told us instead of failing silently.
+                gps_error_detail = gps_coords.get("message") or gps_coords.get("error") or str(gps_coords)
+                st.caption(f"⚠️ Location unavailable: {gps_error_detail}")
+                st.caption(
+                    "Common causes: location permission was denied in the "
+                    "browser, the site isn't loaded over HTTPS (or localhost), "
+                    "or device location services are turned off."
+                )
     with hint_col:
         if HAS_MAP:
             st.caption(t("map_click_hint"))
