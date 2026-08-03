@@ -165,18 +165,6 @@ def get_business_hours_status():
 
     return {"is_open": is_open, "closed_reason": closed_reason, "reopens_label": reopens_label}
 
-# ---------------------------------------------------------------------------
-# Rate limiting / cost control. Two independent caps:
-#   - SESSION_MESSAGE_LIMIT: max AI messages one browser session can send —
-#     stops a single runaway/abusive session from looping indefinitely.
-#   - DAILY_MESSAGE_LIMIT: max AI messages across ALL customers, all
-#     sessions, per calendar day — a hard ceiling on total API spend if this
-#     app is shared publicly with one API key. Both are overridable via
-#     environment variables without touching code.
-# ---------------------------------------------------------------------------
-SESSION_MESSAGE_LIMIT = int(os.environ.get("SESSION_MESSAGE_LIMIT", "40"))
-DAILY_MESSAGE_LIMIT = int(os.environ.get("DAILY_MESSAGE_LIMIT", "500"))
-
 st.set_page_config(
     page_title="AquaAssist",
     page_icon=LOGO_PATH if os.path.exists(LOGO_PATH) else "💧",
@@ -604,16 +592,13 @@ def increment_daily_usage():
 
 def check_and_record_usage():
     """Call this immediately before every AI message send. Returns
-    (allowed: bool, reason: str|None). If allowed, also records the usage
-    so the caps stay accurate for the NEXT call."""
+    (allowed: bool, reason: str|None).
+
+    The session/daily caps have been removed on request — this now always
+    allows the message through. It still records usage so the "AI messages
+    today" stat on the Staff Portal stays accurate; it just never blocks
+    anyone based on that count anymore."""
     session_count = st.session_state.get("_session_message_count", 0)
-    if session_count >= SESSION_MESSAGE_LIMIT:
-        return False, "session"
-
-    daily_count = get_daily_usage_count()
-    if daily_count >= DAILY_MESSAGE_LIMIT:
-        return False, "daily"
-
     st.session_state["_session_message_count"] = session_count + 1
     increment_daily_usage()
     return True, None
@@ -1893,11 +1878,7 @@ if mode == "🔐 Staff Portal":
         st.rerun()
 
     daily_used = get_daily_usage_count()
-    usage_pct = daily_used / DAILY_MESSAGE_LIMIT if DAILY_MESSAGE_LIMIT else 0
-    st.caption(f"🤖 AI messages today: {daily_used} / {DAILY_MESSAGE_LIMIT}")
-    st.progress(min(usage_pct, 1.0))
-    if usage_pct >= 0.9:
-        st.warning("Approaching today's AI message limit — customers will be redirected to phone/WhatsApp once it's reached. Adjust DAILY_MESSAGE_LIMIT if this happens often.")
+    st.caption(f"🤖 AI messages today: {daily_used} (no cap — informational only)")
 
     reports_df = load_reports()
 
