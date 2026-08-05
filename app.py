@@ -36,6 +36,13 @@ chat widget when embedded in an iframe on the NAWASA website. The actual
 floating "open/close" button behavior on nawasa.gd itself is NOT part of
 this codebase — that lives in the website's own HTML/JS as a small iframe
 embed snippet (ask for this separately if you need it).
+
+OFFICE HOURS UX: office-open status is always labeled "Office Open" (never
+just "Open now") throughout the UI. Starting 30 minutes before closing
+time, the status pill, sidebar caption, and Chat tab both switch to an
+amber "closing soon" state with a live countdown so customers know to call
+or WhatsApp before staff go home for the day — see get_business_hours_status()
+and the "closing_soon" / "minutes_until_close" fields it returns.
 """
 
 import os
@@ -78,6 +85,17 @@ try:
 except ImportError:
     HAS_MAP = False
 
+try:
+    # Optional — enables the "closing soon" countdown to tick down on its
+    # own every 60 seconds without the customer needing to click anything.
+    # Without this package the countdown is still accurate on every page
+    # interaction (any click, message, or tab switch), it just won't
+    # self-refresh on a timer.
+    from streamlit_autorefresh import st_autorefresh
+    HAS_AUTOREFRESH = True
+except ImportError:
+    HAS_AUTOREFRESH = False
+
 # ---------------------------------------------------------------------------
 # NAWASA contact details
 # ---------------------------------------------------------------------------
@@ -114,9 +132,14 @@ USAGE_PATH = os.path.join("data", "usage.csv")
 # always closed. NAWASA_HOLIDAYS lists official closure dates (YYYY-MM-DD)
 # that are also treated as closed even if they fall on a business day —
 # add/edit this list each year as NAWASA publishes its holiday schedule.
+#
+# CLOSING_SOON_WINDOW_MINUTES controls how far ahead of closing time the
+# "closing soon" countdown UI (amber status pill, sidebar caption, and
+# Chat tab banner) starts showing.
 # ---------------------------------------------------------------------------
 BUSINESS_HOURS_START = 8   # 8:00 AM
 BUSINESS_HOURS_END = 16    # 4:00 PM
+CLOSING_SOON_WINDOW_MINUTES = 30
 NAWASA_HOLIDAYS = [
     # "2026-01-01",  # New Year's Day
     # "2026-12-25",  # Christmas Day
@@ -133,7 +156,9 @@ def get_business_hours_status():
     server-side in Python (using the server clock — reliable on every
     browser/device, unlike a client-side JS check). Returns a dict with
     `is_open` plus a human-readable `closed_reason` and `reopens_label` for
-    display when closed."""
+    display when closed, and — when open — `closing_soon` (True once we're
+    within CLOSING_SOON_WINDOW_MINUTES of BUSINESS_HOURS_END) and
+    `minutes_until_close` (an int countdown) for display when open."""
     now = datetime.now(GRENADA_TZ)
     today_str = now.strftime("%Y-%m-%d")
     weekday_idx = now.weekday()  # Monday=0 ... Sunday=6
@@ -163,7 +188,21 @@ def get_business_hours_status():
     same_day = next_day.strftime("%Y-%m-%d") == today_str
     reopens_label = ("today" if same_day else _WEEKDAY_LABELS[next_day.weekday()]) + f" at {BUSINESS_HOURS_START}:00 AM"
 
-    return {"is_open": is_open, "closed_reason": closed_reason, "reopens_label": reopens_label}
+    # Countdown to closing time — only meaningful while the office is open.
+    minutes_until_close = None
+    closing_soon = False
+    if is_open:
+        close_time = now.replace(hour=BUSINESS_HOURS_END, minute=0, second=0, microsecond=0)
+        minutes_until_close = max(0, int((close_time - now).total_seconds() // 60))
+        closing_soon = minutes_until_close <= CLOSING_SOON_WINDOW_MINUTES
+
+    return {
+        "is_open": is_open,
+        "closed_reason": closed_reason,
+        "reopens_label": reopens_label,
+        "closing_soon": closing_soon,
+        "minutes_until_close": minutes_until_close,
+    }
 
 st.set_page_config(
     page_title="AquaAssist",
@@ -1046,6 +1085,11 @@ flex-shrink: 0;
 background: #34D399;
 box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.35);
 }}
+.aqua-hero-status-soon .aqua-hero-status-dot {{
+background: #F59E0B;
+box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.35);
+animation: aquaPulseRing 2.5s infinite;
+}}
 .aqua-hero-status-closed .aqua-hero-status-dot {{
 background: #FBBF6B;
 box-shadow: 0 0 0 3px rgba(251, 191, 107, 0.3);
@@ -1648,6 +1692,12 @@ flex-shrink: 0;
 font-size: 0.95rem;
 line-height: 1.4;
 }}
+/* Amber variant — shown during the closing-soon countdown window */
+.aqua-hours-banner-soon {{
+background: #FFF6E5;
+border-color: #F3CB80;
+color: #7A4A00;
+}}
 
 /* --- Widget-embed optimization ---------------------------------------- */
 /* This app is designed to be embedded as a compact popup chat widget on
@@ -1788,8 +1838,10 @@ with st.sidebar:
     st.caption(f"🌐 [nawasa.gd]({NAWASA_WEBSITE})")
     st.caption(f"📍 Territory: {st.session_state.territory}")
     _sidebar_hours = get_business_hours_status()
-    if _sidebar_hours["is_open"]:
-        st.caption("🟢 Open now · Mon–Sat, 8:00 AM – 4:00 PM")
+    if _sidebar_hours["is_open"] and _sidebar_hours["closing_soon"]:
+        st.caption(f"🟡 Office Open — closing in {_sidebar_hours['minutes_until_close']} min · Mon–Sat, 8:00 AM – 4:00 PM")
+    elif _sidebar_hours["is_open"]:
+        st.caption("🟢 Office Open · Mon–Sat, 8:00 AM – 4:00 PM")
     else:
         st.caption(f"🟠 Offices Closed — reopens {_sidebar_hours['reopens_label']} · Mon–Sat, 8:00 AM – 4:00 PM")
 
@@ -1839,6 +1891,10 @@ with st.sidebar:
         st.caption("🔊 Voice replies: enabled by default (Caribbean-leaning voice, Standard English fallback)")
     else:
         st.caption("🔊 Voice replies: not installed (add `gtts` to requirements.txt to enable)")
+    if HAS_AUTOREFRESH:
+        st.caption("⏳ Live closing-soon countdown: enabled")
+    else:
+        st.caption("⏳ Live closing-soon countdown: not installed (add `streamlit-autorefresh` to requirements.txt for auto-ticking; the count is still correct on every interaction without it)")
 
 # ===========================================================================
 # STAFF PORTAL
@@ -2214,8 +2270,21 @@ contact_row_html = f"""<div class="aqua-contact-row">
 st.markdown('<div class="aqua-page">', unsafe_allow_html=True)
 
 hours_status = get_business_hours_status()
-if hours_status["is_open"]:
-    status_pill_html = '<div class="aqua-hero-status aqua-hero-status-open"><span class="aqua-hero-status-dot"></span>Open now</div>'
+
+# While the office is within the closing-soon window, keep the countdown
+# ticking on its own (every 60s) instead of only updating on the next
+# click/message — see HAS_AUTOREFRESH note above for the no-package fallback.
+if hours_status["is_open"] and hours_status["closing_soon"] and HAS_AUTOREFRESH:
+    st_autorefresh(interval=60000, key="aqua_closing_soon_autorefresh")
+
+if hours_status["is_open"] and hours_status["closing_soon"]:
+    _hero_mins = hours_status["minutes_until_close"]
+    status_pill_html = (
+        f'<div class="aqua-hero-status aqua-hero-status-soon">'
+        f'<span class="aqua-hero-status-dot"></span>Office Open — closing in {_hero_mins} min</div>'
+    )
+elif hours_status["is_open"]:
+    status_pill_html = '<div class="aqua-hero-status aqua-hero-status-open"><span class="aqua-hero-status-dot"></span>Office Open</div>'
 else:
     status_pill_html = f'<div class="aqua-hero-status aqua-hero-status-closed"><span class="aqua-hero-status-dot"></span>Offices Closed — reopens {hours_status["reopens_label"]}</div>'
 
@@ -2275,6 +2344,17 @@ if active_tab == "chat":
             f'<span><strong>Our Customer Service team has closed for the day and will reopen '
             f'{hours_status["reopens_label"]}.</strong> AquaAssist remains available 24/7 to answer your questions. '
             f"You're welcome to leave a message here, call, or WhatsApp us at any time—we'll follow up as soon as our team is back in the office.</span>"
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    elif hours_status["closing_soon"]:
+        _banner_mins = hours_status["minutes_until_close"]
+        st.markdown(
+            f'<div class="aqua-hours-banner aqua-hours-banner-soon">'
+            f'<span class="aqua-hours-banner-icon">⏳</span>'
+            f'<span><strong>Heads up — our Customer Service office closes in {_banner_mins} minute{"s" if _banner_mins != 1 else ""} '
+            f'(4:00 PM).</strong> AquaAssist stays available 24/7, but if you\'d like a live representative today, '
+            f"now's the time — call {NAWASA_PHONE} or WhatsApp us before we close.</span>"
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -2749,4 +2829,3 @@ elif active_tab == "settings":
 st.markdown('</div>', unsafe_allow_html=True)  # aqua-page
 
 st.markdown('<div class="aqua-footer">Powered by <strong>NAWASA</strong></div>', unsafe_allow_html=True)
-
