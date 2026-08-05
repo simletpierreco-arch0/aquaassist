@@ -1,8 +1,4 @@
 """
-import streamlit as st
-
-st.write("App started successfully")
-
 AquaAssist — Streamlit UI (Territory login, blue/white wave theme, multi-chat
 history, widget-optimized layout for embedding on the NAWASA website)
 NAWASA (National Water and Sewerage Authority, Grenada) AI customer support platform.
@@ -2753,3 +2749,4 @@ elif active_tab == "settings":
 st.markdown('</div>', unsafe_allow_html=True)  # aqua-page
 
 st.markdown('<div class="aqua-footer">Powered by <strong>NAWASA</strong></div>', unsafe_allow_html=True)
+
