@@ -1,26 +1,18 @@
-This works for me: 
-
-requirements.txt
-
 # --- Core (required) ---
 streamlit>=1.38
+starlette==0.34.0
 google-genai
 pandas
-starlette<0.36.0
 
 # --- Optional: interactive Grenada map on the Report & Track tab ---
-# Without these, the app falls back to manual latitude/longitude entry.
 folium
 streamlit-folium
 
 # --- Optional: one-tap GPS location capture ---
-# Without this, location must be typed in manually.
 streamlit-geolocation
 
 # --- Optional: live in-browser mic recording for voice messages ---
-# Without this, voice notes can still be sent via file upload.
 audio-recorder-streamlit
 
 # --- Optional: text-to-speech for "speak replies aloud" ---
-# Without this, the voice-reply toggle stays disabled.
 gTTS
