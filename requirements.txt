@@ -1,7 +1,12 @@
+This works for me: 
+
+requirements.txt
+
 # --- Core (required) ---
 streamlit>=1.38
 google-genai
 pandas
+starlette<0.36.0
 
 # --- Optional: interactive Grenada map on the Report & Track tab ---
 # Without these, the app falls back to manual latitude/longitude entry.
