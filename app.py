@@ -1425,13 +1425,17 @@ background-color: {BRAND_HOVER} !important;
 color: #FFFFFF !important;
 }}
 /* Portal nav tabs (Chat / Report & Track / FAQ / History / Settings) —
-sized identically to the "Report & Track" tab (the longest label), so
-every tab renders the same fixed box regardless of its own text length. */
-.aqua-nav-btn {{
-height: 3.6rem;
+targets the REAL wrapping div that st.container(key=...) produces
+(class "st-key-aqua_nav_<tab>[_active]"), so — unlike the old
+markdown('<div>')/button()/markdown('</div>') hack, which never actually
+nested the button inside that div — this CSS genuinely reaches the
+button. Every tab gets the identical fixed box (matching "Report &
+Track", the longest label); the "_active" suffix substring match adds
+the highlight only to the currently selected tab. */
+div[class*="st-key-aqua_nav_"] {{
 box-sizing: border-box;
 }}
-.aqua-nav-btn button {{
+div[class*="st-key-aqua_nav_"] button {{
 position: relative;
 box-sizing: border-box !important;
 font-size: 0.78rem !important;
@@ -1450,7 +1454,7 @@ line-height: 1.15;
 padding: 0.35rem 0.2rem !important;
 overflow-wrap: break-word;
 }}
-.aqua-nav-btn-active button {{
+div[class*="st-key-aqua_nav_"][class*="_active"] button {{
 background-color: {BRAND_PRIMARY} !important;
 color: #FFFFFF !important;
 border-color: {BRAND_PRIMARY} !important;
@@ -1458,11 +1462,11 @@ font-weight: 700 !important;
 box-shadow: 0 4px 14px rgba(0, 90, 156, 0.28) !important;
 transform: translateY(-1px);
 }}
-.aqua-nav-btn-active button:hover {{
+div[class*="st-key-aqua_nav_"][class*="_active"] button:hover {{
 background-color: {BRAND_HOVER} !important;
 color: #FFFFFF !important;
 }}
-.aqua-nav-btn-active button::after {{
+div[class*="st-key-aqua_nav_"][class*="_active"] button::after {{
 content: "";
 position: absolute;
 left: 50%;
@@ -2367,12 +2371,20 @@ nav_cols = st.columns(len(NAV_ITEMS))
 for col, (key, label) in zip(nav_cols, NAV_ITEMS):
     with col:
         is_active_nav = st.session_state.active_portal_tab == key
-        wrap_class = "aqua-nav-btn aqua-nav-btn-active" if is_active_nav else "aqua-nav-btn"
-        st.markdown(f'<div class="{wrap_class}">', unsafe_allow_html=True)
-        if st.button(label, key=f"nav_{key}", use_container_width=True):
-            st.session_state.active_portal_tab = key
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+        # st.container(key=...) is the officially supported way to get a
+        # real CSS hook in Streamlit (it adds a genuine class to a REAL
+        # wrapping div around whatever is rendered inside the `with`
+        # block) — unlike st.markdown('<div>')/st.button()/st.markdown('</div>'),
+        # which does NOT actually nest the button inside that div (each
+        # st.markdown call renders as its own isolated block), so that
+        # pattern's CSS never reached the button at all. Naming the key
+        # with an "_active" suffix only when this is the selected tab lets
+        # the CSS below match active vs. inactive via a substring selector.
+        container_key = f"aqua_nav_{key}_active" if is_active_nav else f"aqua_nav_{key}"
+        with st.container(key=container_key):
+            if st.button(label, key=f"nav_{key}", use_container_width=True):
+                st.session_state.active_portal_tab = key
+                st.rerun()
 
 st.divider()
 
