@@ -1,14 +1,19 @@
 import streamlit as st
 from pathlib import Path
+from datetime import datetime, timedelta, timezone
 
-# Page settings
+# -----------------------------
+# Page Settings
+# -----------------------------
 st.set_page_config(
     page_title="AquaAssist",
     page_icon="💧",
     layout="centered"
 )
 
+# -----------------------------
 # Custom Styling
+# -----------------------------
 st.markdown("""
 <style>
 
@@ -48,36 +53,31 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-
-# Center NAWASA Logo
+# -----------------------------
+# Logo
+# -----------------------------
 logo_path = Path(__file__).parent / "nawasa_logo.png"
 
 if logo_path.exists():
-
     st.markdown(
-        """
-        <div style="display: flex; justify-content: center;">
-        """,
-        unsafe_allow_html=True
+        '<div style="display:flex;justify-content:center;">',
+        unsafe_allow_html=True,
     )
 
     st.image(str(logo_path), width=180)
 
     st.markdown(
-        """
-        </div>
-        """,
-        unsafe_allow_html=True
+        "</div>",
+        unsafe_allow_html=True,
     )
-
 else:
     st.warning(
-        "NAWASA logo not found. Please ensure nawasa_logo.png "
-        "is uploaded to the same folder as app.py."
+        "NAWASA logo not found. Please ensure nawasa_logo.png is in the same folder as app.py."
     )
 
-
-# AquaAssist Title
+# -----------------------------
+# Title
+# -----------------------------
 st.markdown(
     '<div class="title">💧 AquaAssist</div>',
     unsafe_allow_html=True
@@ -88,22 +88,23 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-
+# -----------------------------
 # Main Message
+# -----------------------------
 st.markdown("""
 <div class="message">
 
-Thank you for visiting the 
+Thank you for visiting the
 <strong>NAWASA AquaAssist AI Chatbot</strong>.
 
 <br><br>
 
-Our team is currently making improvements and resolving 
+Our team is currently making improvements and resolving
 technical issues to provide customers with the best possible experience.
 
 <br><br>
 
-AquaAssist will soon assist NAWASA customers by providing 
+AquaAssist will soon assist NAWASA customers by providing
 quick information, support, and guidance through artificial intelligence.
 
 <br><br>
@@ -113,15 +114,17 @@ quick information, support, and guidance through artificial intelligence.
 </div>
 """, unsafe_allow_html=True)
 
-
+# -----------------------------
 # Information Box
+# -----------------------------
 st.info(
     "💧 Thank you for your patience and understanding. "
     "The AquaAssist team is working hard to improve your experience."
 )
 
-
+# -----------------------------
 # Footer
+# -----------------------------
 st.markdown("""
 <div class="footer">
 
@@ -132,54 +135,56 @@ STEM Innovation Initiative
 </div>
 """, unsafe_allow_html=True)
 
-# Business hours — NAWASA Customer Service.
-# Monday–Saturday, 8:00 AM–4:00 PM, Grenada local time. Only Sunday is
-# always closed. NAWASA_HOLIDAYS lists official closure dates (YYYY-MM-DD)
-# that are also treated as closed even if they fall on a business day —
-# add/edit this list each year as NAWASA publishes its holiday schedule.
-#
-# CLOSING_SOON_WINDOW_MINUTES controls how far ahead of closing time the
-# "closing soon" countdown UI (amber status pill, sidebar caption, and
-# Chat tab banner) starts showing.
-# ---------------------------------------------------------------------------
-BUSINESS_HOURS_START = 8   # 8:00 AM
-BUSINESS_HOURS_END = 16    # 4:00 PM
+# -----------------------------
+# Business Hours Configuration
+# -----------------------------
+BUSINESS_HOURS_START = 8
+BUSINESS_HOURS_END = 16
 CLOSING_SOON_WINDOW_MINUTES = 160
+
 NAWASA_HOLIDAYS = [
-    # "2026-01-01",  # New Year's Day
-    # "2026-12-25",  # Christmas Day
+    # "2026-01-01",
+    # "2026-12-25",
 ]
-# Grenada is on Atlantic Standard Time (UTC-4) year-round — it does not
-# observe daylight saving — so a fixed offset is used rather than a named
-# timezone (this also avoids depending on the host machine having the IANA
-# tzdata package installed, which some minimal server images lack).
+
 GRENADA_TZ = timezone(timedelta(hours=-4))
-_WEEKDAY_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+_WEEKDAY_LABELS = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+]
 
 def get_business_hours_status():
-    """Computes whether NAWASA Customer Service is open right now, entirely
-    server-side in Python (using the server clock — reliable on every
-    browser/device, unlike a client-side JS check). Returns a dict with
-    `is_open` plus a human-readable `closed_reason` and `reopens_label` for
-    display when closed, and — when open — `closing_soon` (True once we're
-    within CLOSING_SOON_WINDOW_MINUTES of BUSINESS_HOURS_END) and
-    `minutes_until_close` (an int countdown) for display when open."""
     now = datetime.now(GRENADA_TZ)
     today_str = now.strftime("%Y-%m-%d")
-    weekday_idx = now.weekday()  # Monday=0 ... Sunday=6
-    is_weekend = weekday_idx == 6  # Sunday only — Saturday is a business day
+
+    weekday_idx = now.weekday()
+
+    is_weekend = weekday_idx == 6
     is_holiday = today_str in NAWASA_HOLIDAYS
     is_open_hour = BUSINESS_HOURS_START <= now.hour < BUSINESS_HOURS_END
 
-    is_open = (not is_weekend) and (not is_holiday) and is_open_hour
+    is_open = (
+        not is_weekend
+        and not is_holiday
+        and is_open_hour
+    )
 
-    # Figure out the next business day (skipping Sundays/holidays) for the
-    # "reopens" message shown when closed.
     next_day = now
+
     if is_weekend or is_holiday or now.hour >= BUSINESS_HOURS_END:
-        next_day = next_day + timedelta(days=1)
-    while next_day.weekday() == 6 or next_day.strftime("%Y-%m-%d") in NAWASA_HOLIDAYS:
-        next_day = next_day + timedelta(days=1)
+        next_day += timedelta(days=1)
+
+    while (
+        next_day.weekday() == 6
+        or next_day.strftime("%Y-%m-%d") in NAWASA_HOLIDAYS
+    ):
+        next_day += timedelta(days=1)
 
     if is_weekend:
         closed_reason = "It's Sunday"
@@ -191,15 +196,31 @@ def get_business_hours_status():
         closed_reason = "We've closed for the day"
 
     same_day = next_day.strftime("%Y-%m-%d") == today_str
-    reopens_label = ("today" if same_day else _WEEKDAY_LABELS[next_day.weekday()]) + f" at {BUSINESS_HOURS_START}:00 AM"
 
-    # Countdown to closing time — only meaningful while the office is open.
+    reopens_label = (
+        ("today" if same_day else _WEEKDAY_LABELS[next_day.weekday()])
+        + f" at {BUSINESS_HOURS_START}:00 AM"
+    )
+
     minutes_until_close = None
     closing_soon = False
+
     if is_open:
-        close_time = now.replace(hour=BUSINESS_HOURS_END, minute=0, second=0, microsecond=0)
-        minutes_until_close = max(0, int((close_time - now).total_seconds() // 60))
-        closing_soon = minutes_until_close <= CLOSING_SOON_WINDOW_MINUTES
+        close_time = now.replace(
+            hour=BUSINESS_HOURS_END,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+
+        minutes_until_close = max(
+            0,
+            int((close_time - now).total_seconds() // 60),
+        )
+
+        closing_soon = (
+            minutes_until_close <= CLOSING_SOON_WINDOW_MINUTES
+        )
 
     return {
         "is_open": is_open,
@@ -209,12 +230,11 @@ def get_business_hours_status():
         "minutes_until_close": minutes_until_close,
     }
 
-st.set_page_config(
-    page_title="AquaAssist",
-    page_icon=LOGO_PATH if os.path.exists(LOGO_PATH) else "💧",
-    # "wide" removes Streamlit's own fixed ~736px centered-layout cap, so
-    # the fluid, vw-based sizing in CSS_BLOCK (see "Auto-sizing layout"
-    # below) is the only thing controlling width — letting the app shrink
-    # to a small popup or grow to a full browser tab without a built-in
-    # ceiling fighting it.
-    layout="wide",
+status = get_business_hours_status()
+
+if status["is_open"]:
+    st.success("🟢 NAWASA Customer Service is currently OPEN.")
+else:
+    st.warning(
+        f"🔴 {status['closed_reason']}. Reopens {status['reopens_label']}."
+    )
