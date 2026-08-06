@@ -139,7 +139,7 @@ USAGE_PATH = os.path.join("data", "usage.csv")
 # ---------------------------------------------------------------------------
 BUSINESS_HOURS_START = 8   # 8:00 AM
 BUSINESS_HOURS_END = 16    # 4:00 PM
-CLOSING_SOON_WINDOW_MINUTES = 30
+CLOSING_SOON_WINDOW_MINUTES = 60
 NAWASA_HOLIDAYS = [
     # "2026-01-01",  # New Year's Day
     # "2026-12-25",  # Christmas Day
