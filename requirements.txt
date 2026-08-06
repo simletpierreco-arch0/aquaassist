@@ -1,21 +1,20 @@
---- Core (required) ---
+# Core (required)
 streamlit>=1.38
-starlette==0.34.0
 google-genai
 pandas
 
---- Optional: interactive Grenada map on the Report & Track tab ---
+# Optional: interactive Grenada map on the Report & Track tab
 folium
 streamlit-folium
 
---- Optional: one-tap GPS location capture ---
+# Optional: one-tap GPS location capture
 streamlit-geolocation
 
---- Optional: live in-browser mic recording for voice messages ---
+# Optional: live in-browser mic recording for voice messages
 audio-recorder-streamlit
 
---- Optional: text-to-speech for "speak replies aloud" ---
+# Optional: text-to-speech for "speak replies aloud"
 gTTS
 
---- Optional: live self-refreshing "closing soon" countdown ---
+# Optional: live self-refreshing "closing soon" countdown
 streamlit-autorefresh
