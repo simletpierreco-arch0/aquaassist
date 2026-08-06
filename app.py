@@ -1424,23 +1424,30 @@ border: none !important;
 background-color: {BRAND_HOVER} !important;
 color: #FFFFFF !important;
 }}
-/* Portal nav tabs (Chat / Report & Track / FAQ / History / Settings) */
+/* Portal nav tabs (Chat / Report & Track / FAQ / History / Settings) —
+sized identically to the "Report & Track" tab (the longest label), so
+every tab renders the same fixed box regardless of its own text length. */
 .aqua-nav-btn {{
-height: 100%;
+height: 3.6rem;
+box-sizing: border-box;
 }}
 .aqua-nav-btn button {{
 position: relative;
-font-size: 0.78rem;
-min-height: 3.4rem;
-height: 3.4rem;
-width: 100%;
-display: flex;
+box-sizing: border-box !important;
+font-size: 0.78rem !important;
+min-height: 3.6rem !important;
+max-height: 3.6rem !important;
+height: 3.6rem !important;
+width: 100% !important;
+min-width: 100% !important;
+max-width: 100% !important;
+display: flex !important;
 align-items: center;
 justify-content: center;
 text-align: center;
 white-space: normal;
-line-height: 1.2;
-padding: 0.4rem 0.25rem;
+line-height: 1.15;
+padding: 0.35rem 0.2rem !important;
 overflow-wrap: break-word;
 }}
 .aqua-nav-btn-active button {{
