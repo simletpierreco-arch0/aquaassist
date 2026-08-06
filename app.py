@@ -207,7 +207,12 @@ def get_business_hours_status():
 st.set_page_config(
     page_title="AquaAssist",
     page_icon=LOGO_PATH if os.path.exists(LOGO_PATH) else "💧",
-    layout="centered",
+    # "wide" removes Streamlit's own fixed ~736px centered-layout cap, so
+    # the fluid, vw-based sizing in CSS_BLOCK (see "Auto-sizing layout"
+    # below) is the only thing controlling width — letting the app shrink
+    # to a small popup or grow to a full browser tab without a built-in
+    # ceiling fighting it.
+    layout="wide",
 )
 
 # ---------------------------------------------------------------------------
@@ -1559,7 +1564,8 @@ box-sizing: border-box;
 opacity: 0.9;
 }}
 .aqua-login-wrap {{
-max-width: 460px;
+max-width: min(460px, 94vw);
+width: 100%;
 margin: 0 auto;
 animation: aquaFadeUp 0.4s ease-out;
 }}
@@ -1752,19 +1758,58 @@ border-color: #F3CB80;
 color: #7A4A00;
 }}
 
-/* --- Widget-embed optimization ---------------------------------------- */
-/* This app is designed to be embedded as a compact popup chat widget on
-the NAWASA website (via iframe). These rules hide Streamlit's default
-page chrome and tighten spacing so it reads as a purpose-built widget
-rather than a generic web app. */
+/* --- Auto-sizing layout ------------------------------------------------ */
+/* This app can be embedded ANYWHERE: a small popup chat widget on the
+NAWASA website, a full browser tab, a wide desktop window, or a narrow
+mobile screen. Rather than a fixed pixel width tuned for one context, the
+container below is fluid — it's sized as a percentage of whatever space
+it's actually given (vw units resolve against the real iframe/tab/window
+viewport it's placed in), clamped between a comfortable minimum and a
+readable maximum so text never stretches edge-to-edge on a huge screen or
+gets clipped in a tiny popup. Everything below (fonts, hero, tiles, nav
+tabs) scales continuously with clamp() rather than jumping at a single
+breakpoint, so it looks right at every size in between too. */
+html, body {{
+width: 100%;
+height: 100%;
+margin: 0;
+}}
+.stApp {{
+min-height: 100vh;
+width: 100%;
+}}
 #MainMenu, header[data-testid="stHeader"], footer {{
 visibility: hidden;
 height: 0;
 }}
 .block-container {{
-padding-top: 1.2rem;
-padding-bottom: 1rem;
-max-width: 480px;
+padding-top: clamp(0.8rem, 2vw, 1.2rem);
+padding-bottom: clamp(0.6rem, 1.5vw, 1rem);
+padding-left: clamp(0.6rem, 3vw, 1.5rem);
+padding-right: clamp(0.6rem, 3vw, 1.5rem);
+width: 100% !important;
+max-width: min(720px, 96vw) !important;
+margin-left: auto !important;
+margin-right: auto !important;
+box-sizing: border-box;
+}}
+.aqua-hero-title, .aqua-dash-greeting {{
+font-size: clamp(1.25rem, 4vw, 1.7rem);
+}}
+.aqua-hero-subtitle, .aqua-dash-subtitle {{
+font-size: clamp(0.8rem, 2.2vw, 0.92rem);
+}}
+.aqua-login-title {{
+font-size: clamp(1.3rem, 4.5vw, 1.6rem);
+}}
+.aqua-tile-grid {{
+grid-template-columns: 1fr 1fr;
+}}
+.aqua-contact-row {{
+flex-wrap: wrap;
+}}
+.aqua-contact-card {{
+min-width: 90px;
 }}
 [data-testid="stTabs"] [data-baseweb="tab-list"] {{
 gap: 4px;
@@ -1773,17 +1818,31 @@ gap: 4px;
 border-radius: 12px 12px 0 0;
 font-weight: 600;
 }}
-@media (max-width: 480px) {{
+/* Extra-narrow popups (e.g. a slim floating chat bubble) — tighten
+further so nothing overflows or wraps awkwardly. */
+@media (max-width: 360px) {{
 .block-container {{
-padding-left: 0.6rem;
-padding-right: 0.6rem;
-max-width: 100%;
+padding-left: 0.45rem;
+padding-right: 0.45rem;
 }}
-.aqua-hero-title, .aqua-dash-greeting {{
-font-size: 1.4rem;
+.aqua-hero {{
+padding: 1.2rem 1.1rem 3rem 1.1rem;
 }}
-.aqua-tile-grid {{
-grid-template-columns: 1fr 1fr;
+div[class*="st-key-aqua_nav_"] button {{
+font-size: 0.68rem !important;
+padding: 0.25rem 0.1rem !important;
+}}
+}}
+/* Roomy contexts (a full browser tab or a wide desktop window) — let the
+hero and text breathe a bit more instead of staying pinned to widget-sized
+spacing. */
+@media (min-width: 900px) {{
+.block-container {{
+padding-top: 2rem;
+padding-bottom: 1.8rem;
+}}
+.aqua-hero {{
+padding: 2.1rem 2.2rem 3.8rem 2.2rem;
 }}
 }}
 </style>"""
