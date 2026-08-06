@@ -1424,6 +1424,34 @@ border: none !important;
 background-color: {BRAND_HOVER} !important;
 color: #FFFFFF !important;
 }}
+/* Portal nav tabs (Chat / Report & Track / FAQ / History / Settings) */
+.aqua-nav-btn button {{
+position: relative;
+font-size: 0.82rem;
+}}
+.aqua-nav-btn-active button {{
+background-color: {BRAND_PRIMARY} !important;
+color: #FFFFFF !important;
+border-color: {BRAND_PRIMARY} !important;
+font-weight: 700 !important;
+box-shadow: 0 4px 14px rgba(0, 90, 156, 0.28) !important;
+transform: translateY(-1px);
+}}
+.aqua-nav-btn-active button:hover {{
+background-color: {BRAND_HOVER} !important;
+color: #FFFFFF !important;
+}}
+.aqua-nav-btn-active button::after {{
+content: "";
+position: absolute;
+left: 50%;
+bottom: -6px;
+transform: translateX(-50%);
+width: 55%;
+height: 3px;
+border-radius: 3px;
+background-color: {BRAND_ACCENT};
+}}
 section[data-testid="stSidebar"] {{
 background-color: {BRAND_CARD};
 background-image: url("{_WAVE_BG_SVG}");
@@ -2311,20 +2339,19 @@ chat_hero = f"""<div class="aqua-hero">
 st.markdown(chat_hero, unsafe_allow_html=True)
 
 NAV_ITEMS = [
-    ("chat", t("tab_chat")), ("faq", t("tab_faq")), ("report", t("tab_report")),
+    ("chat", t("tab_chat")), ("report", t("tab_report")), ("faq", t("tab_faq")),
     ("history", t("tab_history")), ("settings", t("tab_settings")),
 ]
 nav_cols = st.columns(len(NAV_ITEMS))
 for col, (key, label) in zip(nav_cols, NAV_ITEMS):
     with col:
-        wrap_class = "aqua-primary-btn" if st.session_state.active_portal_tab == key else ""
-        if wrap_class:
-            st.markdown(f'<div class="{wrap_class}">', unsafe_allow_html=True)
+        is_active_nav = st.session_state.active_portal_tab == key
+        wrap_class = "aqua-nav-btn aqua-nav-btn-active" if is_active_nav else "aqua-nav-btn"
+        st.markdown(f'<div class="{wrap_class}">', unsafe_allow_html=True)
         if st.button(label, key=f"nav_{key}", use_container_width=True):
             st.session_state.active_portal_tab = key
             st.rerun()
-        if wrap_class:
-            st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 st.divider()
 
