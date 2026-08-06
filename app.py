@@ -1425,9 +1425,23 @@ background-color: {BRAND_HOVER} !important;
 color: #FFFFFF !important;
 }}
 /* Portal nav tabs (Chat / Report & Track / FAQ / History / Settings) */
+.aqua-nav-btn {{
+height: 100%;
+}}
 .aqua-nav-btn button {{
 position: relative;
-font-size: 0.82rem;
+font-size: 0.78rem;
+min-height: 3.4rem;
+height: 3.4rem;
+width: 100%;
+display: flex;
+align-items: center;
+justify-content: center;
+text-align: center;
+white-space: normal;
+line-height: 1.2;
+padding: 0.4rem 0.25rem;
+overflow-wrap: break-word;
 }}
 .aqua-nav-btn-active button {{
 background-color: {BRAND_PRIMARY} !important;
