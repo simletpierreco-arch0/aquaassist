@@ -128,9 +128,9 @@ STAFF_PASSCODE = os.environ.get("STAFF_PASSCODE", "changeme123")
 #   Path B: an index you embedded yourself (e.g. with Gemini's
 #           text-embedding-004) before upserting.
 # ---------------------------------------------------------------------------
-PINECONE_API_KEY = os.environ.get("PINECONE_API_KEY", "")
-PINECONE_INDEX_NAME = os.environ.get("PINECONE_INDEX_NAME", "")
-PINECONE_NAMESPACE = os.environ.get("PINECONE_NAMESPACE", "")
+PINECONE_API_KEY = os.environ.get("pcsk_2a2QEh_SjAcjHXcdmQvgrgRpqJorum5dbqLuqgktfcfvyisWwmN1w7jaCLDTfyd1hq5LY8", "")
+PINECONE_INDEX_NAME = os.environ.get("aquaassist-nawasa", "")
+PINECONE_NAMESPACE = os.environ.get("nawasa", "")
 
 @st.cache_resource
 def get_pinecone_index():
