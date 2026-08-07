@@ -97,12 +97,100 @@ try:
 except ImportError:
     HAS_AUTOREFRESH = False
 
+try:
+    # Optional — powers NAWASA knowledge-base retrieval (see below).
+    # pip install pinecone
+    from pinecone import Pinecone
+    HAS_PINECONE = True
+except ImportError:
+    HAS_PINECONE = False
+
 # ---------------------------------------------------------------------------
 # NAWASA contact details
 # ---------------------------------------------------------------------------
 NAWASA_PHONE = "(473) 440-2155"
 NAWASA_WEBSITE = "https://nawasa.gd/"
 STAFF_PASSCODE = os.environ.get("STAFF_PASSCODE", "changeme123")
+
+# ---------------------------------------------------------------------------
+# Pinecone knowledge retrieval — OPTIONAL. If PINECONE_API_KEY /
+# PINECONE_INDEX_NAME aren't set, or `pinecone` isn't installed, the app
+# just skips retrieval and answers using build_system_instruction()/FAQS
+# only, exactly like before.
+#
+# PINECONE_INDEX_NAME -> set this to the EXACT index name you created
+# (e.g. "quickstart").
+# PINECONE_NAMESPACE  -> leave "" unless you upserted into a namespace.
+#
+# Handles BOTH common Pinecone setups automatically:
+#   Path A: integrated/hosted embedding index (you upserted plain text and
+#           let Pinecone embed it — this is the default quickstart flow).
+#   Path B: an index you embedded yourself (e.g. with Gemini's
+#           text-embedding-004) before upserting.
+# ---------------------------------------------------------------------------
+PINECONE_API_KEY = os.environ.get("PINECONE_API_KEY", "")
+PINECONE_INDEX_NAME = os.environ.get("PINECONE_INDEX_NAME", "")
+PINECONE_NAMESPACE = os.environ.get("PINECONE_NAMESPACE", "")
+
+@st.cache_resource
+def get_pinecone_index():
+    if not HAS_PINECONE or not PINECONE_API_KEY or not PINECONE_INDEX_NAME:
+        return None
+    try:
+        pc = Pinecone(api_key=PINECONE_API_KEY)
+        return pc.Index(PINECONE_INDEX_NAME)
+    except Exception:
+        return None
+
+def retrieve_nawasa_knowledge(query_text, top_k=4):
+    """Searches Pinecone for NAWASA knowledge relevant to what the customer
+    just asked, and returns a short reference block to ground the AI's
+    reply. Returns "" on any failure — retrieval is never fatal, the bot
+    just falls back to its built-in facts."""
+    index = get_pinecone_index()
+    if index is None or not query_text:
+        return ""
+
+    # Path A: integrated/hosted embedding index (e.g. Pinecone's own
+    # "quickstart" wizard, where you upserted plain text records).
+    try:
+        results = index.search(
+            namespace=PINECONE_NAMESPACE,
+            query={"top_k": top_k, "inputs": {"text": query_text}},
+        )
+        hits = (results.get("result", {}) or {}).get("hits", [])
+        snippets = []
+        for hit in hits:
+            fields = hit.get("fields", {}) or {}
+            text = fields.get("text") or fields.get("chunk_text") or fields.get("content") or ""
+            if text:
+                snippets.append(text)
+        if snippets:
+            return "\n\n".join(snippets)
+    except Exception:
+        pass
+
+    # Path B: self-embedded vectors (Gemini text-embedding-004)
+    try:
+        embed_client = genai.Client(api_key=st.session_state.get("api_key", ""))
+        embed_response = embed_client.models.embed_content(
+            model="text-embedding-004", contents=query_text,
+        )
+        query_vector = embed_response.embeddings[0].values
+        results = index.query(
+            namespace=PINECONE_NAMESPACE, vector=query_vector,
+            top_k=top_k, include_metadata=True,
+        )
+        matches = results.get("matches", []) if isinstance(results, dict) else results.matches
+        snippets = []
+        for match in matches:
+            meta = (match.get("metadata", {}) if isinstance(match, dict) else match.metadata) or {}
+            text = meta.get("text") or meta.get("chunk_text") or meta.get("content") or ""
+            if text:
+                snippets.append(text)
+        return "\n\n".join(snippets)
+    except Exception:
+        return ""
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -213,11 +301,6 @@ def get_business_hours_status():
 st.set_page_config(
     page_title="AquaAssist",
     page_icon=LOGO_PATH if os.path.exists(LOGO_PATH) else "💧",
-    # "wide" removes Streamlit's own fixed ~736px centered-layout cap, so
-    # the fluid, vw-based sizing in CSS_BLOCK (see "Auto-sizing layout"
-    # below) is the only thing controlling width — letting the app shrink
-    # to a small popup or grow to a full browser tab without a built-in
-    # ceiling fighting it.
     layout="wide",
 )
 
@@ -232,10 +315,7 @@ defaults = {
     "dark_mode": False,
     "high_contrast": False,
     "large_text": False,
-    "voice_replies": HAS_TTS,      # spoken replies are the priority channel — default ON
-                                    # whenever text-to-speech is actually available, so
-                                    # customers get audio without having to discover the
-                                    # toggle first. Falls back to False if gTTS isn't installed.
+    "voice_replies": HAS_TTS,
     "chat_sessions": {},           # id -> {"name": str, "messages": [...]}
     "current_session_id": None,
 }
@@ -248,15 +328,10 @@ if not st.session_state.current_session_id:
     st.session_state.chat_sessions[_sid] = {"name": "New chat", "messages": []}
     st.session_state.current_session_id = _sid
 
-# Convenience alias — `messages` is the SAME list object stored inside
-# chat_sessions[current_session_id], so appending here also updates history.
 st.session_state.messages = st.session_state.chat_sessions[st.session_state.current_session_id]["messages"]
 
 # ---------------------------------------------------------------------------
-# Territories — replaces the old language selector. The chatbot's output
-# language is now always Standard English (it still UNDERSTANDS Grenadian
-# Creole input — see build_system_instruction() — it just never replies in
-# it). Territory instead controls which WhatsApp number the app points to.
+# Territories
 # ---------------------------------------------------------------------------
 TERRITORIES = ["Grenada", "Carriacou", "Petit Martinique"]
 TERRITORY_WHATSAPP = {
@@ -268,36 +343,16 @@ TERRITORY_WHATSAPP = {
 def get_whatsapp_link():
     return TERRITORY_WHATSAPP.get(st.session_state.get("territory", "Grenada"), TERRITORY_WHATSAPP["Grenada"])
 
-# Recomputed every script run (Streamlit reruns top-to-bottom on every
-# interaction), so changing territory anywhere immediately updates every
-# WhatsApp button/link/reference throughout the app.
 WHATSAPP_LINK = get_whatsapp_link()
 
 def _sync_territory(source_key, other_key):
-    """on_change callback for a territory selectbox.
-
-    There are three separate territory pickers in this app (the login
-    screen, the sidebar "Territory & API key" expander, and the Settings
-    tab), and the sidebar/settings ones are keyed widgets. Writing directly
-    to another widget's session_state[key] from the MAIN script body raises
-    `StreamlitAPIException: ...cannot be modified after the widget...` once
-    that key's widget has already been instantiated earlier in the same
-    run (e.g. the sidebar renders before the Settings tab, so by the time
-    Settings tries to update sidebar_territory_select, it's too late).
-    An on_change callback avoids this: it fires BEFORE the rerun that
-    rebuilds the page, i.e. before either widget has been instantiated for
-    the new run, so it's safe to update both here. This keeps every
-    territory picker (and everything derived from territory: WhatsApp
-    link, system instruction, Gemini chat session) in sync no matter which
-    one was used to change it.
-    """
     new_value = st.session_state[source_key]
     st.session_state.territory = new_value
     st.session_state[other_key] = new_value
     st.session_state.pop("chat", None)
 
 # ---------------------------------------------------------------------------
-# Grenada geography — for the report location picker
+# Grenada geography
 # ---------------------------------------------------------------------------
 GRENADA_PARISHES = [
     "St. George's (Capital area)", "St. Andrew's", "St. David's",
@@ -305,9 +360,6 @@ GRENADA_PARISHES = [
 ]
 GRENADA_CENTER = (12.1165, -61.6790)
 
-# UI text — Standard English only (per client requirement, the interface and
-# all AI replies are always English; the app no longer offers a language
-# picker or auto-translation).
 UI_TEXT = {
     "welcome": (
         "👋 **Welcome to AquaAssist**\n\n"
@@ -437,22 +489,12 @@ MODEL_NAME = "gemini-3.1-flash-lite"
 # Report storage helpers
 # ---------------------------------------------------------------------------
 def _migrate_reports_schema():
-    """Self-heals data/reports.csv if its header is missing a column that
-    the current REPORTS_FIELDS expects (e.g. "severity", added after some
-    reports.csv files already existed). Without this, save_report() writes
-    rows with MORE values than the file's existing header has columns for,
-    which misaligns every row and breaks both Track a Report and the Staff
-    Portal when the file is read back. Existing data is preserved — this
-    only adds the missing column(s) with a safe default, it never deletes
-    rows or columns."""
     import pandas as pd
     if not os.path.exists(REPORTS_PATH):
         return
     try:
         df = pd.read_csv(REPORTS_PATH)
     except Exception:
-        # File is unreadable/corrupted in some other way — leave it alone
-        # here; load_reports() has its own fallback for this case.
         return
     changed = False
     for col in REPORTS_FIELDS:
@@ -502,14 +544,9 @@ def load_reports():
     try:
         df = pd.read_csv(REPORTS_PATH)
     except Exception:
-        # Still broken after migration (e.g. genuinely corrupted file) —
-        # rebuild a clean, empty, correctly-columned file rather than
-        # crashing Track a Report / the Staff Portal on every load.
         with open(REPORTS_PATH, "w", newline="", encoding="utf-8") as f:
             csv.DictWriter(f, fieldnames=REPORTS_FIELDS).writeheader()
         df = pd.read_csv(REPORTS_PATH)
-    # Guarantee every expected column exists even if something upstream
-    # still slipped through, so callers can always safely do df["severity"] etc.
     for col in REPORTS_FIELDS:
         if col not in df.columns:
             df[col] = "Unknown" if col == "severity" else ""
@@ -535,9 +572,6 @@ def save_notification_signup(contact, categories):
         })
 
 def parse_report_coords(location_text):
-    """Pulls (lat, lng) out of a location string like '... (GPS: 12.11650,
-    -61.67900)', which is how both the map picker and the geolocation button
-    write coordinates into the location field. Returns None if not found."""
     import re
     if not isinstance(location_text, str):
         return None
@@ -550,13 +584,7 @@ def parse_report_coords(location_text):
         return None
 
 # ---------------------------------------------------------------------------
-# Outage announcements — staff creates these; the customer portal shows a
-# banner to anyone whose parish matches an announcement whose date range
-# covers today. This is an in-app "proactive" notice: it surfaces the next
-# time a customer opens (or already has open) the app, since actually
-# pushing a message to someone's phone/email requires wiring up an SMS or
-# email provider (e.g. Twilio, SendGrid) with its own API key, which isn't
-# configured here.
+# Outage announcements
 # ---------------------------------------------------------------------------
 def save_outage(parish, message, start_date, end_date):
     ensure_files()
@@ -599,11 +627,7 @@ def get_active_outages_for_parish(parish):
     return matches.to_dict("records")
 
 # ---------------------------------------------------------------------------
-# Usage tracking — a single-row-per-day counter file backing the daily cap.
-# Best-effort, not perfectly atomic under heavy concurrent writes (a plain
-# CSV isn't built for that), but for a small utility's customer-support
-# volume this is a simple, dependency-free way to put a hard ceiling on
-# total daily AI spend without standing up a real database.
+# Usage tracking
 # ---------------------------------------------------------------------------
 def _ensure_usage_file():
     os.makedirs(os.path.dirname(USAGE_PATH), exist_ok=True)
@@ -636,18 +660,10 @@ def increment_daily_usage():
         df.loc[df["date"].astype(str) == today, "count"] += 1
     else:
         df = pd.concat([df, pd.DataFrame([{"date": today, "count": 1}])], ignore_index=True)
-    # Keep the file small — only the last 30 days of counts are needed.
     df = df.tail(30)
     df.to_csv(USAGE_PATH, index=False)
 
 def check_and_record_usage():
-    """Call this immediately before every AI message send. Returns
-    (allowed: bool, reason: str|None).
-
-    The session/daily caps have been removed on request — this now always
-    allows the message through. It still records usage so the "AI messages
-    today" stat on the Staff Portal stays accurate; it just never blocks
-    anyone based on that count anymore."""
     session_count = st.session_state.get("_session_message_count", 0)
     st.session_state["_session_message_count"] = session_count + 1
     increment_daily_usage()
@@ -660,19 +676,9 @@ def usage_limit_message(reason):
 
 # ---------------------------------------------------------------------------
 # Email sending helper (Staff Portal — testing flow)
-#
-# Credentials are typed into the Staff Portal UI each session (see the
-# "Contact subscribers" section below) and kept only in st.session_state —
-# never written to disk, never hardcoded here, never read from an env var.
-# This is intentionally a manual-entry testing flow; swap it for a proper
-# secret (env var / Streamlit secret) once this moves past testing.
 # ---------------------------------------------------------------------------
 def send_notification_email(sender_email, sender_password, to_email, subject, body,
                               smtp_host="smtp.gmail.com", smtp_port=587):
-    """Sends a plain-text email via SMTP. Returns (success: bool, error: str|None).
-    For Gmail, sender_password must be an App Password (not the normal login
-    password) — generate one at https://myaccount.google.com/apppasswords,
-    which requires 2-Step Verification to be turned on first."""
     try:
         msg = MIMEText(body)
         msg["Subject"] = subject
@@ -704,10 +710,8 @@ def log_water_report(location: str, issue_type: str, description: str,
         name: The customer's name, if given.
         phone: The customer's phone number, if given.
         severity: One of "Unknown", "Low", "Medium", "High". If the customer
-            attached a photo of the issue, assess how serious it looks (e.g.
-            a small drip vs. a burst main flooding a street) and set this
-            accordingly; otherwise leave it "Unknown" rather than guessing
-            from text alone.
+            attached a photo of the issue, assess how serious it looks; otherwise
+            leave it "Unknown" rather than guessing from text alone.
 
     Returns:
         A confirmation message including the reference number for tracking.
@@ -716,30 +720,7 @@ def log_water_report(location: str, issue_type: str, description: str,
     return f"Report logged successfully. Reference number: {reference}. A technician will follow up."
 
 # ---------------------------------------------------------------------------
-# Voice helpers — Caribbean-leaning English text-to-speech
-#
-# Spoken audio replies are treated as the PRIORITY channel for this app
-# (see `voice_replies` in session defaults, which defaults to True whenever
-# gTTS is installed) — customers should hear a warm, natural voice without
-# having to discover and flip a toggle first.
-#
-# gTTS (Google Translate TTS) does not offer a dedicated "Grenadian" or
-# "Caribbean English" voice model — its `lang`/`tld` options only select
-# from Google's existing regional English accents. There is no tld that
-# reproduces a Grenadian accent specifically. Per the brief's own fallback
-# instructions ("if a Grenadian voice is unavailable, use the closest
-# high-quality Caribbean English voice; if none is available, fall back to
-# a warm Standard English voice"), this tries the accents below in order
-# and keeps the first one that actually renders audio successfully:
-#   1. en / tld=com.jm  — Jamaican English (closest Caribbean-region accent
-#      gTTS exposes; not Grenadian, but the nearest available approximation)
-#   2. en / tld=co.uk   — a neutral, warm Standard English fallback
-#   3. en / tld=us      — final fallback if the above are unreachable
-# Normal (non-slow) playback speed is used throughout so the voice sounds
-# natural and conversational rather than a robotic read-aloud.
-# If a fully Caribbean/Grenadian voice becomes available through whichever
-# speech provider is ultimately selected for production (e.g. a premium
-# TTS API with regional accent packs), swap the implementation here.
+# Voice helpers
 # ---------------------------------------------------------------------------
 VOICE_ACCENT_CHAIN = [
     {"tld": "com.jm", "label": "Caribbean (Jamaican English — closest available to Grenadian)"},
@@ -761,7 +742,7 @@ def speak_text(text, lang_code="en"):
     return None
 
 # ---------------------------------------------------------------------------
-# Chat session helpers (multi-chat history, like a typical AI chat app)
+# Chat session helpers
 # ---------------------------------------------------------------------------
 def _auto_name_from(text, limit=42):
     text = " ".join(text.split())
@@ -776,24 +757,21 @@ def start_new_chat():
     new_id = str(uuid.uuid4())
     st.session_state.chat_sessions[new_id] = {"name": "New chat", "messages": []}
     st.session_state.current_session_id = new_id
-    st.session_state.pop("chat", None)  # force a fresh Gemini chat session
+    st.session_state.pop("chat", None)
 
 def switch_to_chat(session_id):
     if session_id != st.session_state.current_session_id:
         st.session_state.current_session_id = session_id
-        st.session_state.pop("chat", None)  # reseed Gemini session from this chat's transcript
+        st.session_state.pop("chat", None)
 
 def ordered_session_ids():
-    # Current session first if it's brand new/empty; otherwise most-recently-touched first.
     ids = list(st.session_state.chat_sessions.keys())
     ids.remove(st.session_state.current_session_id)
     ids.reverse()
     return [st.session_state.current_session_id] + ids
 
 # ---------------------------------------------------------------------------
-# System instruction — tone rules per the Communications team's brief:
-# understand Grenadian Creole, always reply in Standard English, sound like
-# a warm and experienced NAWASA representative rather than a generic bot.
+# System instruction
 # ---------------------------------------------------------------------------
 def build_system_instruction(territory):
     territory_whatsapp = TERRITORY_WHATSAPP.get(territory, TERRITORY_WHATSAPP["Grenada"])
@@ -805,13 +783,13 @@ Always reply in clear, professional Standard English, regardless of what languag
 
 CONVERSATION STYLE:
 Sound like an experienced, caring NAWASA customer service representative — not a generic AI chatbot. Be warm, natural, and conversational, never robotic or overly formal.
-- Prefer natural phrasing over stiff, templated wording. For example, say "I've received your request and I'm here to help — let's get this sorted out" rather than "Your request has been processed." Say "I'm sorry, I didn't quite understand that — could you try asking your question another way?" rather than "Invalid input."
+- Prefer natural phrasing over stiff, templated wording.
 - Vary your wording across a conversation; avoid repeating the same stock phrases turn after turn.
 - Greet customers naturally and maintain a friendly, professional tone throughout.
 - Keep track of what's already been said in the conversation and don't ask the customer to repeat information they've already given you.
-- When a customer reports a problem — no water, a leak, a burst main, a billing concern — show empathy first: acknowledge how frustrating or inconvenient it is, reassure them you're there to help, and then guide them calmly through the next steps.
-- Keep responses concise, clear, and easy to understand, while still sounding like a real person who cares about getting the customer's problem solved.
-- Your replies are frequently read aloud by text-to-speech, so favor calm, warm, empathetic phrasing that sounds natural when spoken — short sentences, plain punctuation, and a reassuring tone throughout.
+- When a customer reports a problem, show empathy first, then guide them calmly through the next steps.
+- Keep responses concise, clear, and easy to understand.
+- Your replies are frequently read aloud by text-to-speech, so favor calm, warm, empathetic phrasing that sounds natural when spoken.
 
 Use the following facts to answer user questions:
 - Help customers report water leaks by collecting the location and relevant details.
@@ -820,22 +798,16 @@ Use the following facts to answer user questions:
 - Explain the available methods for paying NAWASA bills.
 - Provide NAWASA customer service contact information and transfer users to a representative when requested.
 - If the issue is an emergency, advise the user to contact NAWASA immediately at (473) 440-2155.
-- NAWASA's official contact details: Phone (473) 440-2155, WhatsApp via {territory_whatsapp} (this is the number for {territory}), Website https://nawasa.gd/. Share these when a customer asks how to reach NAWASA directly.
-- When a customer describes a specific problem (a leak, no water, low pressure, a billing issue) and gives at least a location, log it immediately using the log_water_report tool — do not tell the customer to fill out a separate form themselves. After logging it, tell the customer their reference number so they can track it, and let them know NAWASA staff will follow up. If you don't have their name or phone number yet, ask for it after logging so staff can reach them, but don't block logging the report on that.
-- If the customer attaches a photo or video of the issue, look at it before calling log_water_report and set the tool's severity argument based on what you actually see (e.g. a small drip is "Low", a steady leak is "Medium", a burst main or flooding is "High"). If there's no photo, leave severity as "Unknown" — never guess severity from text description alone.
-- The "Report a Leak" form, voice messages, and the WhatsApp button are alternative ways to reach NAWASA, but you should always try to log the report yourself first if the customer is describing it in chat.
-- Use natural understanding, not keyword matching — "I have no water", "my bill is wrong", "I smell chlorine", "my meter is leaking" should all be recognized as reportable issues even without exact keywords.
+- NAWASA's official contact details: Phone (473) 440-2155, WhatsApp via {territory_whatsapp} (this is the number for {territory}), Website https://nawasa.gd/.
+- When a customer describes a specific problem and gives at least a location, log it immediately using the log_water_report tool — do not tell the customer to fill out a separate form themselves.
+- If the customer attaches a photo or video of the issue, look at it before calling log_water_report and set severity based on what you actually see.
+- Use natural understanding, not keyword matching.
 
 If a question is unrelated to NAWASA services, politely explain that you can only assist with NAWASA-related topics and invite the user to ask another water service question.
 """
 
 # ---------------------------------------------------------------------------
-# Brand palette — official NAWASA colour system, with dark mode / high
-# contrast swaps. Base (light) values follow the official NAWASA brief:
-#   Primary #005A9C · Secondary/Accent #00AEEF · Hover #0077CC
-#   Background #F6FBFF · Cards #FFFFFF · Text #33414F
-# If your exact brand hex differs, swap the BRAND_* values below and every
-# gradient/card/button/bubble in the app follows.
+# Brand palette
 # ---------------------------------------------------------------------------
 if st.session_state.high_contrast:
     BRAND_PRIMARY = "#00385E"
@@ -862,21 +834,14 @@ else:
     BRAND_CARD = "#FFFFFF"
     BRAND_TEXT = "#33414F"
 
-# Dedicated chat-bubble colors (spec-exact, independent of dark/high-contrast
-# so the conversation stays legible even if those toggles are on).
 USER_BUBBLE_BG = "#D9F3FF"
 USER_BUBBLE_TEXT = "#003B5C"
 ASSISTANT_BUBBLE_BORDER = f"{BRAND_PRIMARY}33"
-# Was hardcoded to a dark gray meant for a white card. In dark mode the
-# assistant bubble background (BRAND_CARD) goes dark too, so a fixed dark
-# text color produced dark-on-dark, unreadable text. Follow BRAND_TEXT
-# instead, which already flips to a light color in dark mode.
 ASSISTANT_BUBBLE_TEXT = BRAND_TEXT
 HOURS_BANNER_BG = "#EAF6FF"
 HOURS_BANNER_BORDER = "#B8DDF7"
 HOURS_BANNER_TEXT = "#003B5C"
 
-# Kept for any lingering references — old names now alias to the new palette.
 BRAND_BLUE = BRAND_PRIMARY
 BRAND_BLUE_LIGHT = BRAND_ACCENT
 BRAND_BLUE_DARK = BRAND_TEXT
@@ -898,14 +863,11 @@ if logo_path.exists():
         nawasa_logo_b64 = base64.b64encode(f.read()).decode()
 
 def nawasa_logo_tag(size_px=56, css_class=""):
-    """Official NAWASA logo <img>, centered, or a styled text-badge
-    fallback if the asset isn't present next to app.py as nawasa_logo.png."""
     classes = f"aqua-nawasa-logo {css_class}".strip()
     if nawasa_logo_b64:
         return f'<img class="{classes}" src="data:image/png;base64,{nawasa_logo_b64}" style="width:{size_px}px;height:{size_px}px;" />'
     return f'<span class="aqua-login-nawasa-fallback {classes}" style="width:{size_px}px;height:{size_px}px;">NAWASA</span>'
 
-# A soft repeating wave pattern used as a fixed backdrop behind the whole app.
 _WAVE_BG_SVG = (
     "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20"
     "viewBox='0%200%201200%20200'%20preserveAspectRatio='none'%3E"
@@ -916,7 +878,6 @@ _WAVE_BG_SVG = (
     "%3C/svg%3E"
 )
 
-# A subtle concentric-ripple pattern used behind hero/dashboard panels.
 _RIPPLE_BG_SVG = (
     "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20"
     "viewBox='0%200%20300%20300'%3E"
@@ -929,11 +890,6 @@ _RIPPLE_BG_SVG = (
     "%3C/svg%3E"
 )
 
-# ---------------------------------------------------------------------------
-# Custom CSS — every line flush-left (Markdown treats 4+ space indents as a
-# literal code block and refuses to render it as HTML, even with
-# unsafe_allow_html=True — keep every line here starting at column 0).
-# ---------------------------------------------------------------------------
 CSS_BLOCK = f"""<style>
 html, body, [class*="css"] {{
 font-family: 'Poppins', 'Inter', sans-serif;
@@ -947,53 +903,16 @@ background-position: top, bottom;
 background-size: 100% 420px, 1200px 200px;
 background-attachment: fixed, fixed;
 }}
-::-webkit-scrollbar {{
-width: 8px;
-height: 8px;
-}}
-::-webkit-scrollbar-track {{
-background: {BRAND_BG};
-}}
-::-webkit-scrollbar-thumb {{
-background: {BRAND_PRIMARY}55;
-border-radius: 10px;
-}}
-::-webkit-scrollbar-thumb:hover {{
-background: {BRAND_PRIMARY}88;
-}}
-@keyframes aquaFadeUp {{
-from {{ opacity: 0; transform: translateY(10px); }}
-to {{ opacity: 1; transform: translateY(0); }}
-}}
-@keyframes aquaPulseRing {{
-0% {{ box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.55); }}
-70% {{ box-shadow: 0 0 0 14px rgba(37, 211, 102, 0); }}
-100% {{ box-shadow: 0 0 0 0 rgba(37, 211, 102, 0); }}
-}}
-@keyframes aquaShimmer {{
-0% {{ background-position: 0% 50%; }}
-50% {{ background-position: 100% 50%; }}
-100% {{ background-position: 0% 50%; }}
-}}
-@keyframes aquaRipple {{
-0% {{ transform: scale(0.85); opacity: 0.35; }}
-100% {{ transform: scale(1.35); opacity: 0; }}
-}}
-@keyframes aquaPop {{
-0% {{ opacity: 0; transform: scale(0.92) translateY(8px); }}
-60% {{ opacity: 1; transform: scale(1.01) translateY(0); }}
-100% {{ opacity: 1; transform: scale(1) translateY(0); }}
-}}
-@keyframes aquaDotBounce {{
-0%, 80%, 100% {{ transform: translateY(0); opacity: 0.5; }}
-40% {{ transform: translateY(-5px); opacity: 1; }}
-}}
-* {{
-scroll-behavior: smooth;
-}}
-.aqua-page {{
-animation: aquaFadeUp 0.35s ease-out;
-}}
+::-webkit-scrollbar {{ width: 8px; height: 8px; }}
+::-webkit-scrollbar-track {{ background: {BRAND_BG}; }}
+::-webkit-scrollbar-thumb {{ background: {BRAND_PRIMARY}55; border-radius: 10px; }}
+::-webkit-scrollbar-thumb:hover {{ background: {BRAND_PRIMARY}88; }}
+@keyframes aquaFadeUp {{ from {{ opacity: 0; transform: translateY(10px); }} to {{ opacity: 1; transform: translateY(0); }} }}
+@keyframes aquaPulseRing {{ 0% {{ box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.55); }} 70% {{ box-shadow: 0 0 0 14px rgba(37, 211, 102, 0); }} 100% {{ box-shadow: 0 0 0 0 rgba(37, 211, 102, 0); }} }}
+@keyframes aquaPop {{ 0% {{ opacity: 0; transform: scale(0.92) translateY(8px); }} 60% {{ opacity: 1; transform: scale(1.01) translateY(0); }} 100% {{ opacity: 1; transform: scale(1) translateY(0); }} }}
+@keyframes aquaDotBounce {{ 0%, 80%, 100% {{ transform: translateY(0); opacity: 0.5; }} 40% {{ transform: translateY(-5px); opacity: 1; }} }}
+* {{ scroll-behavior: smooth; }}
+.aqua-page {{ animation: aquaFadeUp 0.35s ease-out; }}
 .aqua-hero {{
 position: relative;
 background:
@@ -1009,713 +928,99 @@ box-shadow: inset 0 1px 0 rgba(255,255,255,0.14);
 }}
 .aqua-hero::before {{
 content: "";
-position: absolute;
-inset: 0;
+position: absolute; inset: 0;
 background-image: radial-gradient(rgba(255,255,255,0.10) 1.4px, transparent 1.4px);
-background-size: 18px 18px;
-opacity: 0.5;
-z-index: 1;
-pointer-events: none;
+background-size: 18px 18px; opacity: 0.5; z-index: 1; pointer-events: none;
 }}
-.aqua-hero-content {{
-display: flex;
-align-items: center;
-justify-content: space-between;
-gap: 1rem;
-position: relative;
-z-index: 2;
-animation: aquaFadeUp 0.5s ease-out;
-}}
-.aqua-hero-brand {{
-display: flex;
-align-items: center;
-gap: 0.85rem;
-min-width: 0;
-}}
-.aqua-hero img {{
-width: 60px;
-height: 60px;
-border-radius: 50%;
-background: #FFFFFF;
-padding: 5px;
-box-shadow: 0 4px 14px rgba(0,0,0,0.22);
-flex-shrink: 0;
-}}
-.aqua-hero-nawasa-badge {{
-width: 52px;
-height: 52px;
-border-radius: 50%;
-background: #FFFFFF;
-display: flex;
-align-items: center;
-justify-content: center;
-box-shadow: 0 4px 14px rgba(0,0,0,0.22);
-flex-shrink: 0;
-overflow: hidden;
-padding: 4px;
-box-sizing: border-box;
-}}
-.aqua-hero-nawasa-badge img {{
-width: 100%;
-height: 100%;
-object-fit: contain;
-}}
-.aqua-hero-title {{
-font-size: 1.7rem;
-font-weight: 800;
-color: #FFFFFF;
-line-height: 1.15;
-letter-spacing: -0.02em;
-}}
-.aqua-hero-subtitle {{
-font-size: 0.92rem;
-color: rgba(255,255,255,0.9);
-font-weight: 500;
-}}
-.aqua-hero-status {{
-display: inline-flex;
-align-items: center;
-gap: 0.35rem;
-margin-top: 0.45rem;
-padding: 0.2rem 0.65rem;
-border-radius: 999px;
-font-size: 0.68rem;
-font-weight: 700;
-letter-spacing: 0.02em;
-background: rgba(255,255,255,0.16);
-border: 1px solid rgba(255,255,255,0.28);
-color: #FFFFFF;
-}}
-.aqua-hero-status-dot {{
-width: 7px;
-height: 7px;
-border-radius: 50%;
-flex-shrink: 0;
-}}
-.aqua-hero-status-open .aqua-hero-status-dot {{
-background: #34D399;
-box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.35);
-}}
-.aqua-hero-status-soon .aqua-hero-status-dot {{
-background: #F59E0B;
-box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.35);
-animation: aquaPulseRing 2.5s infinite;
-}}
-.aqua-hero-status-closed .aqua-hero-status-dot {{
-background: #FBBF6B;
-box-shadow: 0 0 0 3px rgba(251, 191, 107, 0.3);
-}}
-.aqua-wave {{
-position: absolute;
-bottom: -2px;
-left: 0;
-width: 100%;
-line-height: 0;
-z-index: 1;
-}}
-.aqua-wave-fill {{
-fill: {BRAND_BG};
-}}
-.aqua-glass {{
-background: rgba(255, 255, 255, 0.55);
-backdrop-filter: blur(14px) saturate(160%);
--webkit-backdrop-filter: blur(14px) saturate(160%);
-border: 1px solid rgba(255, 255, 255, 0.6);
-box-shadow: 0 8px 28px rgba(0, 114, 188, 0.12);
-}}
-.aqua-card {{
-background: {BRAND_CARD};
-border-radius: 18px;
-padding: 1.1rem 1.3rem;
-margin-bottom: 1rem;
-box-shadow: 0 2px 12px rgba(0, 114, 188, 0.08);
-border: 1px solid {BRAND_PRIMARY}22;
-animation: aquaFadeUp 0.4s ease-out;
-color: {BRAND_TEXT};
-}}
-.aqua-section-label {{
-display: flex;
-align-items: center;
-gap: 0.4rem;
-font-size: 0.8rem;
-font-weight: 700;
-color: {BRAND_PRIMARY};
-text-transform: uppercase;
-letter-spacing: 0.06em;
-margin: 1.4rem 0 0.6rem 0;
-}}
-.aqua-contact-row {{
-display: flex;
-gap: 0.7rem;
-margin-bottom: 0.5rem;
-}}
-.aqua-contact-card {{
-flex: 1;
-background: {BRAND_CARD};
-border: 1px solid {BRAND_PRIMARY}22;
-border-radius: 16px;
-padding: 0.7rem 0.6rem;
-min-height: 44px;
-text-align: center;
-text-decoration: none !important;
-box-shadow: 0 2px 8px rgba(0, 90, 156, 0.06);
-transition: all 0.18s ease-in-out;
-}}
-.aqua-contact-card:hover {{
-transform: translateY(-3px);
-box-shadow: 0 6px 16px rgba(0, 90, 156, 0.18);
-border-color: {BRAND_ACCENT}88;
-}}
-.aqua-contact-icon {{
-font-size: 1.3rem;
-display: block;
-margin-bottom: 0.2rem;
-}}
-.aqua-contact-label {{
-font-size: 0.72rem;
-font-weight: 700;
-color: {BRAND_TEXT};
-text-transform: uppercase;
-letter-spacing: 0.04em;
-display: block;
-}}
-.aqua-contact-value {{
-font-size: 0.7rem;
-color: {BRAND_PRIMARY};
-font-weight: 600;
-}}
-.aqua-status-badge {{
-display: inline-block;
-padding: 0.2rem 0.7rem;
-border-radius: 999px;
-font-size: 0.75rem;
-font-weight: 700;
-background: {BRAND_PRIMARY}18;
-color: {BRAND_PRIMARY};
-}}
-.aqua-faq-item {{
-background: {BRAND_CARD};
-border: 1px solid {BRAND_PRIMARY}22;
-border-radius: 14px;
-padding: 0.8rem 1rem;
-margin-bottom: 0.6rem;
-color: {BRAND_TEXT};
-transition: box-shadow 0.15s ease-in-out;
-}}
-.aqua-faq-item:hover {{
-box-shadow: 0 4px 14px rgba(0, 114, 188, 0.1);
-}}
-.aqua-faq-cat {{
-font-size: 0.68rem;
-font-weight: 700;
-color: {BRAND_ACCENT};
-text-transform: uppercase;
-letter-spacing: 0.05em;
-}}
-/* Dashboard hero — ripple-textured panel behind the welcome + quick links */
-.aqua-dash-hero {{
-position: relative;
-border-radius: 26px;
-overflow: hidden;
-background: linear-gradient(145deg, {BRAND_PRIMARY} 0%, {BRAND_HOVER} 100%);
-background-image: linear-gradient(145deg, {BRAND_PRIMARY} 0%, {BRAND_HOVER} 100%), url("{_RIPPLE_BG_SVG}");
-background-repeat: no-repeat, no-repeat;
-background-position: 0 0, right -40px top -40px;
-background-size: 100% 100%, 340px 340px;
-padding: 2rem 1.6rem 2.4rem 1.6rem;
-margin-bottom: 1.2rem;
-animation: aquaPop 0.5s ease-out;
-box-shadow: 0 10px 32px rgba(0, 114, 188, 0.22);
-}}
-.aqua-dash-hero-top {{
-display: flex;
-align-items: center;
-justify-content: space-between;
-gap: 0.8rem;
-margin-bottom: 1.1rem;
-}}
-.aqua-dash-hero-top img, .aqua-login-nawasa-fallback {{
-border-radius: 50%;
-background: #FFFFFF;
-box-shadow: 0 4px 14px rgba(0,0,0,0.18);
-object-fit: contain;
-}}
-.aqua-login-nawasa-fallback {{
-display: flex;
-align-items: center;
-justify-content: center;
-color: {BRAND_HOVER};
-font-size: 0.62rem;
-font-weight: 800;
-letter-spacing: 0.03em;
-text-align: center;
-padding: 3px;
-box-sizing: border-box;
-}}
-.aqua-dash-greeting {{
-font-size: 1.55rem;
-font-weight: 800;
-color: #FFFFFF;
-letter-spacing: -0.02em;
-line-height: 1.2;
-}}
-.aqua-dash-subtitle {{
-font-size: 0.92rem;
-color: rgba(255,255,255,0.92);
-font-weight: 500;
-margin-top: 0.15rem;
-}}
-.aqua-dash-badge {{
-display: inline-flex;
-align-items: center;
-gap: 0.35rem;
-background: rgba(255,255,255,0.16);
-border: 1px solid rgba(255,255,255,0.3);
-color: #FFFFFF;
-font-size: 0.72rem;
-font-weight: 600;
-padding: 0.28rem 0.7rem;
-border-radius: 999px;
-margin-top: 0.7rem;
-}}
-/* Quick action tiles — icon-led glass cards instead of plain buttons */
-.aqua-tile-grid {{
-display: grid;
-grid-template-columns: 1fr 1fr;
-gap: 0.7rem;
-margin-bottom: 0.3rem;
-}}
-.aqua-tile {{
-background: {BRAND_CARD};
-border: 1px solid {BRAND_PRIMARY}1f;
-border-radius: 18px;
-padding: 0.85rem 0.7rem 0.7rem 0.7rem;
-box-shadow: 0 2px 10px rgba(0, 114, 188, 0.07);
-transition: all 0.15s ease-in-out;
-animation: aquaFadeUp 0.4s ease-out;
-}}
-.aqua-tile:hover {{
-transform: translateY(-3px);
-box-shadow: 0 8px 20px rgba(0, 114, 188, 0.16);
-border-color: {BRAND_ACCENT}66;
-}}
-.aqua-tile-icon-wrap {{
-width: 38px;
-height: 38px;
-border-radius: 12px;
-background: linear-gradient(135deg, {BRAND_PRIMARY}22, {BRAND_ACCENT}22);
-display: flex;
-align-items: center;
-justify-content: center;
-font-size: 1.15rem;
-margin-bottom: 0.5rem;
-}}
-.aqua-tile-title {{
-font-weight: 700;
-font-size: 0.85rem;
-color: {BRAND_TEXT};
-margin-bottom: 0.15rem;
-}}
-.aqua-tile-desc {{
-font-size: 0.72rem;
-color: {BRAND_TEXT}99;
-line-height: 1.3;
-}}
-.aqua-tile-btn button {{
-margin-top: 0.55rem;
-width: 100%;
-}}
-/* Chat bubbles — clear customer vs. AI distinction (spec-exact colors) */
-[data-testid="stChatMessage"] {{
-border-radius: 18px;
-padding: 0.75rem 1rem;
-margin-bottom: 0.75rem;
-box-shadow: 0 2px 10px rgba(0, 90, 156, 0.07);
-animation: aquaFadeUp 0.3s ease-out;
-border: 1px solid transparent;
-gap: 0.65rem;
-transition: box-shadow 0.15s ease-in-out;
-}}
-[data-testid="stChatMessage"] [data-testid="stChatMessageAvatarAssistant"],
-[data-testid="stChatMessage"] [data-testid="stChatMessageAvatarUser"] {{
-box-shadow: 0 0 0 2px {BRAND_CARD}, 0 0 0 3px {BRAND_PRIMARY}30;
-}}
-[data-testid="stChatMessage"]:has(img[alt="assistant avatar"]),
-[data-testid="stChatMessageAvatarAssistant"] ~ div,
-div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {{
-background: {BRAND_CARD};
-border: 1px solid {ASSISTANT_BUBBLE_BORDER};
-border-radius: 6px 18px 18px 18px;
-color: {ASSISTANT_BUBBLE_TEXT};
-}}
-[data-testid="stChatMessage"]:has(img[alt="assistant avatar"]) p,
-div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) p {{
-color: {ASSISTANT_BUBBLE_TEXT};
-}}
-div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {{
-background: {USER_BUBBLE_BG};
-border: 1px solid {USER_BUBBLE_BG};
-border-radius: 18px 6px 18px 18px;
-flex-direction: row-reverse;
-text-align: right;
-}}
-div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) p {{
-color: {USER_BUBBLE_TEXT};
-}}
-.aqua-typing-dots {{
-display: inline-flex;
-gap: 4px;
-padding: 0.2rem 0;
-}}
-.aqua-typing-dots span {{
-width: 6px;
-height: 6px;
-border-radius: 50%;
-background: {BRAND_PRIMARY};
-animation: aquaDotBounce 1.2s infinite ease-in-out;
-}}
-.aqua-typing-dots span:nth-child(2) {{ animation-delay: 0.15s; }}
-.aqua-typing-dots span:nth-child(3) {{ animation-delay: 0.3s; }}
-/* Loading state — three animated dots instead of Streamlit's default spinner icon */
-[data-testid="stSpinner"] > div {{
-display: flex;
-align-items: center;
-gap: 0.5rem;
-color: {BRAND_PRIMARY};
-font-weight: 600;
-}}
-[data-testid="stSpinner"] svg {{
-display: none;
-}}
+.aqua-hero-content {{ display: flex; align-items: center; justify-content: space-between; gap: 1rem; position: relative; z-index: 2; animation: aquaFadeUp 0.5s ease-out; }}
+.aqua-hero-brand {{ display: flex; align-items: center; gap: 0.85rem; min-width: 0; }}
+.aqua-hero img {{ width: 60px; height: 60px; border-radius: 50%; background: #FFFFFF; padding: 5px; box-shadow: 0 4px 14px rgba(0,0,0,0.22); flex-shrink: 0; }}
+.aqua-hero-nawasa-badge {{ width: 52px; height: 52px; border-radius: 50%; background: #FFFFFF; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0,0,0,0.22); flex-shrink: 0; overflow: hidden; padding: 4px; box-sizing: border-box; }}
+.aqua-hero-nawasa-badge img {{ width: 100%; height: 100%; object-fit: contain; }}
+.aqua-hero-title {{ font-size: 1.7rem; font-weight: 800; color: #FFFFFF; line-height: 1.15; letter-spacing: -0.02em; }}
+.aqua-hero-subtitle {{ font-size: 0.92rem; color: rgba(255,255,255,0.9); font-weight: 500; }}
+.aqua-hero-status {{ display: inline-flex; align-items: center; gap: 0.35rem; margin-top: 0.45rem; padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.02em; background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.28); color: #FFFFFF; }}
+.aqua-hero-status-dot {{ width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }}
+.aqua-hero-status-open .aqua-hero-status-dot {{ background: #34D399; box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.35); }}
+.aqua-hero-status-soon .aqua-hero-status-dot {{ background: #F59E0B; box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.35); animation: aquaPulseRing 2.5s infinite; }}
+.aqua-hero-status-closed .aqua-hero-status-dot {{ background: #FBBF6B; box-shadow: 0 0 0 3px rgba(251, 191, 107, 0.3); }}
+.aqua-wave {{ position: absolute; bottom: -2px; left: 0; width: 100%; line-height: 0; z-index: 1; }}
+.aqua-wave-fill {{ fill: {BRAND_BG}; }}
+.aqua-card {{ background: {BRAND_CARD}; border-radius: 18px; padding: 1.1rem 1.3rem; margin-bottom: 1rem; box-shadow: 0 2px 12px rgba(0, 114, 188, 0.08); border: 1px solid {BRAND_PRIMARY}22; animation: aquaFadeUp 0.4s ease-out; color: {BRAND_TEXT}; }}
+.aqua-section-label {{ display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; font-weight: 700; color: {BRAND_PRIMARY}; text-transform: uppercase; letter-spacing: 0.06em; margin: 1.4rem 0 0.6rem 0; }}
+.aqua-contact-row {{ display: flex; gap: 0.7rem; margin-bottom: 0.5rem; }}
+.aqua-contact-card {{ flex: 1; background: {BRAND_CARD}; border: 1px solid {BRAND_PRIMARY}22; border-radius: 16px; padding: 0.7rem 0.6rem; min-height: 44px; text-align: center; text-decoration: none !important; box-shadow: 0 2px 8px rgba(0, 90, 156, 0.06); transition: all 0.18s ease-in-out; }}
+.aqua-contact-card:hover {{ transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0, 90, 156, 0.18); border-color: {BRAND_ACCENT}88; }}
+.aqua-contact-icon {{ font-size: 1.3rem; display: block; margin-bottom: 0.2rem; }}
+.aqua-contact-label {{ font-size: 0.72rem; font-weight: 700; color: {BRAND_TEXT}; text-transform: uppercase; letter-spacing: 0.04em; display: block; }}
+.aqua-contact-value {{ font-size: 0.7rem; color: {BRAND_PRIMARY}; font-weight: 600; }}
+.aqua-status-badge {{ display: inline-block; padding: 0.2rem 0.7rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; background: {BRAND_PRIMARY}18; color: {BRAND_PRIMARY}; }}
+.aqua-faq-item {{ background: {BRAND_CARD}; border: 1px solid {BRAND_PRIMARY}22; border-radius: 14px; padding: 0.8rem 1rem; margin-bottom: 0.6rem; color: {BRAND_TEXT}; transition: box-shadow 0.15s ease-in-out; }}
+.aqua-faq-item:hover {{ box-shadow: 0 4px 14px rgba(0, 114, 188, 0.1); }}
+.aqua-faq-cat {{ font-size: 0.68rem; font-weight: 700; color: {BRAND_ACCENT}; text-transform: uppercase; letter-spacing: 0.05em; }}
+[data-testid="stChatMessage"] {{ border-radius: 18px; padding: 0.75rem 1rem; margin-bottom: 0.75rem; box-shadow: 0 2px 10px rgba(0, 90, 156, 0.07); animation: aquaFadeUp 0.3s ease-out; border: 1px solid transparent; gap: 0.65rem; transition: box-shadow 0.15s ease-in-out; }}
+[data-testid="stChatMessage"] [data-testid="stChatMessageAvatarAssistant"], [data-testid="stChatMessage"] [data-testid="stChatMessageAvatarUser"] {{ box-shadow: 0 0 0 2px {BRAND_CARD}, 0 0 0 3px {BRAND_PRIMARY}30; }}
+[data-testid="stChatMessage"]:has(img[alt="assistant avatar"]), [data-testid="stChatMessageAvatarAssistant"] ~ div, div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {{ background: {BRAND_CARD}; border: 1px solid {ASSISTANT_BUBBLE_BORDER}; border-radius: 6px 18px 18px 18px; color: {ASSISTANT_BUBBLE_TEXT}; }}
+[data-testid="stChatMessage"]:has(img[alt="assistant avatar"]) p, div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) p {{ color: {ASSISTANT_BUBBLE_TEXT}; }}
+div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {{ background: {USER_BUBBLE_BG}; border: 1px solid {USER_BUBBLE_BG}; border-radius: 18px 6px 18px 18px; flex-direction: row-reverse; text-align: right; }}
+div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) p {{ color: {USER_BUBBLE_TEXT}; }}
+[data-testid="stSpinner"] > div {{ display: flex; align-items: center; gap: 0.5rem; color: {BRAND_PRIMARY}; font-weight: 600; }}
+[data-testid="stSpinner"] svg {{ display: none; }}
 [data-testid="stSpinner"] > div::before {{
-content: "";
-display: inline-flex;
-width: 34px;
-height: 8px;
-background-image:
-radial-gradient({BRAND_PRIMARY} 40%, transparent 41%),
-radial-gradient({BRAND_PRIMARY} 40%, transparent 41%),
-radial-gradient({BRAND_PRIMARY} 40%, transparent 41%);
-background-size: 8px 8px;
-background-repeat: no-repeat;
-background-position: 0 center, 13px center, 26px center;
+content: ""; display: inline-flex; width: 34px; height: 8px;
+background-image: radial-gradient({BRAND_PRIMARY} 40%, transparent 41%), radial-gradient({BRAND_PRIMARY} 40%, transparent 41%), radial-gradient({BRAND_PRIMARY} 40%, transparent 41%);
+background-size: 8px 8px; background-repeat: no-repeat; background-position: 0 center, 13px center, 26px center;
 animation: aquaDotBounce 1.2s infinite ease-in-out;
 }}
-div.stButton > button {{
-border-radius: 12px;
-border: 1px solid {BRAND_PRIMARY}30;
-background-color: {BRAND_CARD};
-color: {BRAND_PRIMARY};
-font-weight: 600;
-padding: 0.7rem 0.6rem;
-min-height: 44px;
-box-shadow: 0 2px 6px rgba(0, 90, 156, 0.06);
-transition: all 0.18s ease-in-out;
-}}
-div.stButton > button:hover {{
-border-color: {BRAND_HOVER};
-color: {BRAND_HOVER};
-background-color: {BRAND_BG_SOFT};
-box-shadow: 0 6px 16px rgba(0, 90, 156, 0.16);
-transform: translateY(-2px);
-}}
-div.stButton > button:focus-visible {{
-outline: 2px solid {BRAND_ACCENT};
-outline-offset: 2px;
-}}
-div.stButton > button:active {{
-transform: translateY(0px) scale(0.98);
-}}
-.aqua-primary-btn button {{
-background-color: {BRAND_PRIMARY} !important;
-color: #FFFFFF !important;
-border: none !important;
-}}
-.aqua-primary-btn button:hover {{
-background-color: {BRAND_HOVER} !important;
-color: #FFFFFF !important;
-}}
-/* Portal nav tabs (Chat / Report & Track / FAQ / History / Settings) —
-targets the REAL wrapping div that st.container(key=...) produces
-(class "st-key-aqua_nav_<tab>[_active]"), so — unlike the old
-markdown('<div>')/button()/markdown('</div>') hack, which never actually
-nested the button inside that div — this CSS genuinely reaches the
-button. Every tab gets the identical fixed box (matching "Report &
-Track", the longest label); the "_active" suffix substring match adds
-the highlight only to the currently selected tab. */
-div[class*="st-key-aqua_nav_"] {{
-box-sizing: border-box;
-}}
+div.stButton > button {{ border-radius: 12px; border: 1px solid {BRAND_PRIMARY}30; background-color: {BRAND_CARD}; color: {BRAND_PRIMARY}; font-weight: 600; padding: 0.7rem 0.6rem; min-height: 44px; box-shadow: 0 2px 6px rgba(0, 90, 156, 0.06); transition: all 0.18s ease-in-out; }}
+div.stButton > button:hover {{ border-color: {BRAND_HOVER}; color: {BRAND_HOVER}; background-color: {BRAND_BG_SOFT}; box-shadow: 0 6px 16px rgba(0, 90, 156, 0.16); transform: translateY(-2px); }}
+div.stButton > button:focus-visible {{ outline: 2px solid {BRAND_ACCENT}; outline-offset: 2px; }}
+div.stButton > button:active {{ transform: translateY(0px) scale(0.98); }}
+.aqua-primary-btn button {{ background-color: {BRAND_PRIMARY} !important; color: #FFFFFF !important; border: none !important; }}
+.aqua-primary-btn button:hover {{ background-color: {BRAND_HOVER} !important; color: #FFFFFF !important; }}
+div[class*="st-key-aqua_nav_"] {{ box-sizing: border-box; }}
 div[class*="st-key-aqua_nav_"] button {{
-position: relative;
-box-sizing: border-box !important;
-font-size: 0.78rem !important;
-min-height: 3.6rem !important;
-max-height: 3.6rem !important;
-height: 3.6rem !important;
-width: 100% !important;
-min-width: 100% !important;
-max-width: 100% !important;
-display: flex !important;
-align-items: center;
-justify-content: center;
-text-align: center;
-white-space: normal;
-line-height: 1.15;
-padding: 0.35rem 0.2rem !important;
-overflow-wrap: break-word;
+position: relative; box-sizing: border-box !important; font-size: 0.78rem !important;
+min-height: 3.6rem !important; max-height: 3.6rem !important; height: 3.6rem !important;
+width: 100% !important; min-width: 100% !important; max-width: 100% !important;
+display: flex !important; align-items: center; justify-content: center; text-align: center;
+white-space: normal; line-height: 1.15; padding: 0.35rem 0.2rem !important; overflow-wrap: break-word;
 }}
-div[class*="st-key-aqua_nav_"][class*="_active"] button {{
-background-color: {BRAND_PRIMARY} !important;
-color: #FFFFFF !important;
-border-color: {BRAND_PRIMARY} !important;
-font-weight: 700 !important;
-box-shadow: 0 4px 14px rgba(0, 90, 156, 0.28) !important;
-transform: translateY(-1px);
-}}
-div[class*="st-key-aqua_nav_"][class*="_active"] button:hover {{
-background-color: {BRAND_HOVER} !important;
-color: #FFFFFF !important;
-}}
-div[class*="st-key-aqua_nav_"][class*="_active"] button::after {{
-content: "";
-position: absolute;
-left: 50%;
-bottom: -6px;
-transform: translateX(-50%);
-width: 55%;
-height: 3px;
-border-radius: 3px;
-background-color: {BRAND_ACCENT};
-}}
-section[data-testid="stSidebar"] {{
-background-color: {BRAND_CARD};
-background-image: url("{_WAVE_BG_SVG}");
-background-repeat: repeat-x;
-background-position: bottom;
-background-size: 900px 150px;
-border-right: 1px solid {BRAND_PRIMARY}22;
-}}
-.aqua-sidebar-newchat button {{
-background-color: {BRAND_PRIMARY} !important;
-color: #FFFFFF !important;
-border: none !important;
-width: 100%;
-font-weight: 700;
-}}
-.aqua-sidebar-newchat button:hover {{
-background-color: {BRAND_HOVER} !important;
-transform: none;
-}}
-.aqua-history-btn button {{
-text-align: left !important;
-justify-content: flex-start !important;
-background: transparent !important;
-box-shadow: none !important;
-border: none !important;
-padding: 0.4rem 0.3rem !important;
-font-weight: 500 !important;
-color: {BRAND_TEXT} !important;
-}}
-.aqua-history-btn button:hover {{
-background: {BRAND_BG_SOFT} !important;
-transform: none !important;
-box-shadow: none !important;
-color: {BRAND_PRIMARY} !important;
-}}
-.aqua-history-active button {{
-background: {BRAND_PRIMARY}14 !important;
-color: {BRAND_PRIMARY} !important;
-font-weight: 700 !important;
-}}
-.whatsapp-float {{
-position: fixed;
-bottom: 24px;
-right: 24px;
-z-index: 9999;
-background-color: {WHATSAPP_GREEN};
-color: white !important;
-text-decoration: none !important;
-width: 56px;
-height: 56px;
-border-radius: 50%;
-display: flex;
-align-items: center;
-justify-content: center;
-font-size: 1.6rem;
-box-shadow: 0 4px 16px rgba(37, 211, 102, 0.45);
-transition: transform 0.15s ease-in-out;
-animation: aquaPulseRing 2.5s infinite;
-}}
-.whatsapp-float:hover {{
-transform: scale(1.1);
-animation: none;
-}}
-.whatsapp-btn {{
-display: inline-flex;
-align-items: center;
-gap: 0.5rem;
-background-color: {WHATSAPP_GREEN};
-color: white !important;
-text-decoration: none !important;
-padding: 0.55rem 1rem;
-border-radius: 999px;
-font-weight: 700;
-font-size: 0.9rem;
-width: 100%;
-justify-content: center;
-box-sizing: border-box;
-}}
-.whatsapp-btn:hover {{
-opacity: 0.9;
-}}
-.aqua-login-wrap {{
-max-width: min(460px, 94vw);
-width: 100%;
-margin: 0 auto;
-animation: aquaFadeUp 0.4s ease-out;
-}}
-.aqua-login-header {{
-display: flex;
-align-items: center;
-justify-content: center;
-gap: 0.6rem;
-padding: 1.6rem 0.5rem 1rem 0.5rem;
-text-align: center;
-}}
-.aqua-login-header-left, .aqua-login-header-right {{
-display: none;
-}}
-.aqua-login-header-left img, .aqua-login-header-right img {{
-width: 56px;
-height: 56px;
-border-radius: 50%;
-background: #FFFFFF;
-padding: 5px;
-box-shadow: 0 4px 14px rgba(0, 114, 188, 0.18);
-object-fit: contain;
-}}
-.aqua-login-drop-fallback {{
-font-size: 2rem;
-}}
-.aqua-login-header-center {{
-flex: 1 1 auto;
-text-align: center;
-display: flex;
-flex-direction: column;
-align-items: center;
-}}
-.aqua-nawasa-logo {{
-display: block;
-margin: 0 auto 0.6rem auto;
-}}
-.aqua-login-title {{
-font-size: 1.6rem;
-font-weight: 800;
-color: {BRAND_TEXT};
-letter-spacing: -0.02em;
-line-height: 1.1;
-}}
-.aqua-login-subtitle {{
-font-size: 0.85rem;
-color: {BRAND_PRIMARY};
-font-weight: 500;
-}}
-.aqua-login-card {{
-margin-top: 0.3rem;
-}}
-.aqua-demo-tag {{
-display: inline-block;
-margin-top: 0.5rem;
-padding: 0.15rem 0.6rem;
-border-radius: 999px;
-font-size: 0.62rem;
-font-weight: 700;
-letter-spacing: 0.03em;
-text-transform: uppercase;
-}}
-.aqua-login-demo-tag {{
-color: {BRAND_PRIMARY};
-background: {BRAND_PRIMARY}14;
-border: 1px solid {BRAND_PRIMARY}30;
-}}
-.aqua-hero-demo-tag {{
-color: #FFFFFF;
-background: rgba(255,255,255,0.16);
-border: 1px solid rgba(255,255,255,0.28);
-}}
-.aqua-mic-btn button {{
-border-radius: 50% !important;
-width: 2.75rem !important;
-height: 2.75rem !important;
-min-height: 2.75rem !important;
-padding: 0 !important;
-font-size: 1.1rem !important;
-}}
-
-/* Chat input — larger rounded field, brand focus ring, droplet-accented send button */
-[data-testid="stChatInput"] {{
-border-radius: 20px;
-}}
-[data-testid="stChatInput"] textarea {{
-font-size: 0.95rem;
-padding-top: 0.65rem;
-padding-bottom: 0.65rem;
-}}
-[data-testid="stChatInputContainer"] {{
-border-radius: 20px !important;
-border: 1px solid {BRAND_PRIMARY}30 !important;
-box-shadow: 0 2px 10px rgba(0, 90, 156, 0.06);
-transition: box-shadow 0.15s ease-in-out, border-color 0.15s ease-in-out;
-}}
-[data-testid="stChatInputContainer"]:focus-within {{
-border-color: {BRAND_ACCENT} !important;
-box-shadow: 0 0 0 3px {BRAND_ACCENT}22;
-}}
-button[data-testid="stChatInputSubmitButton"] {{
-background-color: {BRAND_PRIMARY} !important;
-border-radius: 50% !important;
-color: #FFFFFF !important;
-position: relative;
-transition: background-color 0.15s ease-in-out, transform 0.15s ease-in-out;
-}}
-button[data-testid="stChatInputSubmitButton"]:hover {{
-background-color: {BRAND_HOVER} !important;
-transform: scale(1.06);
-}}
-button[data-testid="stChatInputSubmitButton"] svg {{
-fill: #FFFFFF !important;
-}}
-button[data-testid="stChatInputSubmitButton"]::after {{
-content: "💧";
-position: absolute;
-top: -6px;
-right: -4px;
-font-size: 0.6rem;
-line-height: 1;
-filter: drop-shadow(0 1px 1px rgba(0,0,0,0.25));
-}}
-
-/* FIX: Streamlit renders the chat input inside a fixed-position "bottom"
-container that sits OUTSIDE .stApp's own stacking context, sized against
-the raw <html>/<body>. That container (and the page body beneath it) has
-its own solid background independent of .stApp's gradient, so it shows up
-as a plain white/cream band behind the chat input pill instead of blending
-into the blue wave theme. The exact data-testid Streamlit gives this
-container has changed across versions, so a wildcard attribute selector is
-used to catch it regardless (stBottom, stBottomBlockContainer, etc.),
-plus html/body itself as the ultimate fallback layer. */
-html, body {{
-background-color: {BRAND_BG} !important;
-}}
-/* Streamlit's own theme drives many native containers off CSS custom
-properties rather than a class Claude can target directly — overriding
-the variables themselves is more robust than chasing every container. */
-:root, .stApp {{
---background-color: {BRAND_BG} !important;
---secondary-background-color: {BRAND_BG_SOFT} !important;
---text-color: {BRAND_TEXT} !important;
-}}
+div[class*="st-key-aqua_nav_"][class*="_active"] button {{ background-color: {BRAND_PRIMARY} !important; color: #FFFFFF !important; border-color: {BRAND_PRIMARY} !important; font-weight: 700 !important; box-shadow: 0 4px 14px rgba(0, 90, 156, 0.28) !important; transform: translateY(-1px); }}
+div[class*="st-key-aqua_nav_"][class*="_active"] button:hover {{ background-color: {BRAND_HOVER} !important; color: #FFFFFF !important; }}
+div[class*="st-key-aqua_nav_"][class*="_active"] button::after {{ content: ""; position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%); width: 55%; height: 3px; border-radius: 3px; background-color: {BRAND_ACCENT}; }}
+section[data-testid="stSidebar"] {{ background-color: {BRAND_CARD}; background-image: url("{_WAVE_BG_SVG}"); background-repeat: repeat-x; background-position: bottom; background-size: 900px 150px; border-right: 1px solid {BRAND_PRIMARY}22; }}
+.aqua-sidebar-newchat button {{ background-color: {BRAND_PRIMARY} !important; color: #FFFFFF !important; border: none !important; width: 100%; font-weight: 700; }}
+.aqua-sidebar-newchat button:hover {{ background-color: {BRAND_HOVER} !important; transform: none; }}
+.aqua-history-btn button {{ text-align: left !important; justify-content: flex-start !important; background: transparent !important; box-shadow: none !important; border: none !important; padding: 0.4rem 0.3rem !important; font-weight: 500 !important; color: {BRAND_TEXT} !important; }}
+.aqua-history-btn button:hover {{ background: {BRAND_BG_SOFT} !important; transform: none !important; box-shadow: none !important; color: {BRAND_PRIMARY} !important; }}
+.aqua-history-active button {{ background: {BRAND_PRIMARY}14 !important; color: {BRAND_PRIMARY} !important; font-weight: 700 !important; }}
+.whatsapp-float {{ position: fixed; bottom: 24px; right: 24px; z-index: 9999; background-color: {WHATSAPP_GREEN}; color: white !important; text-decoration: none !important; width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; box-shadow: 0 4px 16px rgba(37, 211, 102, 0.45); transition: transform 0.15s ease-in-out; animation: aquaPulseRing 2.5s infinite; }}
+.whatsapp-float:hover {{ transform: scale(1.1); animation: none; }}
+.whatsapp-btn {{ display: inline-flex; align-items: center; gap: 0.5rem; background-color: {WHATSAPP_GREEN}; color: white !important; text-decoration: none !important; padding: 0.55rem 1rem; border-radius: 999px; font-weight: 700; font-size: 0.9rem; width: 100%; justify-content: center; box-sizing: border-box; }}
+.whatsapp-btn:hover {{ opacity: 0.9; }}
+.aqua-login-wrap {{ max-width: min(460px, 94vw); width: 100%; margin: 0 auto; animation: aquaFadeUp 0.4s ease-out; }}
+.aqua-login-header {{ display: flex; align-items: center; justify-content: center; gap: 0.6rem; padding: 1.6rem 0.5rem 1rem 0.5rem; text-align: center; }}
+.aqua-login-header-left, .aqua-login-header-right {{ display: none; }}
+.aqua-login-header-center {{ flex: 1 1 auto; text-align: center; display: flex; flex-direction: column; align-items: center; }}
+.aqua-nawasa-logo {{ display: block; margin: 0 auto 0.6rem auto; }}
+.aqua-login-title {{ font-size: 1.6rem; font-weight: 800; color: {BRAND_TEXT}; letter-spacing: -0.02em; line-height: 1.1; }}
+.aqua-login-subtitle {{ font-size: 0.85rem; color: {BRAND_PRIMARY}; font-weight: 500; }}
+.aqua-login-card {{ margin-top: 0.3rem; }}
+.aqua-demo-tag {{ display: inline-block; margin-top: 0.5rem; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; }}
+.aqua-login-demo-tag {{ color: {BRAND_PRIMARY}; background: {BRAND_PRIMARY}14; border: 1px solid {BRAND_PRIMARY}30; }}
+.aqua-hero-demo-tag {{ color: #FFFFFF; background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.28); }}
+.aqua-mic-btn button {{ border-radius: 50% !important; width: 2.75rem !important; height: 2.75rem !important; min-height: 2.75rem !important; padding: 0 !important; font-size: 1.1rem !important; }}
+[data-testid="stChatInput"] {{ border-radius: 20px; }}
+[data-testid="stChatInput"] textarea {{ font-size: 0.95rem; padding-top: 0.65rem; padding-bottom: 0.65rem; }}
+[data-testid="stChatInputContainer"] {{ border-radius: 20px !important; border: 1px solid {BRAND_PRIMARY}30 !important; box-shadow: 0 2px 10px rgba(0, 90, 156, 0.06); transition: box-shadow 0.15s ease-in-out, border-color 0.15s ease-in-out; }}
+[data-testid="stChatInputContainer"]:focus-within {{ border-color: {BRAND_ACCENT} !important; box-shadow: 0 0 0 3px {BRAND_ACCENT}22; }}
+button[data-testid="stChatInputSubmitButton"] {{ background-color: {BRAND_PRIMARY} !important; border-radius: 50% !important; color: #FFFFFF !important; position: relative; transition: background-color 0.15s ease-in-out, transform 0.15s ease-in-out; }}
+button[data-testid="stChatInputSubmitButton"]:hover {{ background-color: {BRAND_HOVER} !important; transform: scale(1.06); }}
+button[data-testid="stChatInputSubmitButton"] svg {{ fill: #FFFFFF !important; }}
+button[data-testid="stChatInputSubmitButton"]::after {{ content: "💧"; position: absolute; top: -6px; right: -4px; font-size: 0.6rem; line-height: 1; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.25)); }}
+html, body {{ background-color: {BRAND_BG} !important; }}
+:root, .stApp {{ --background-color: {BRAND_BG} !important; --secondary-background-color: {BRAND_BG_SOFT} !important; --text-color: {BRAND_TEXT} !important; }}
 [data-testid*="Bottom"], [class*="bottom"] {{
 background: {BRAND_BG} !important;
 background-image: linear-gradient(180deg, {BRAND_BG_SOFT} 0%, {BRAND_BG} 100%), url("{_WAVE_BG_SVG}") !important;
@@ -1723,133 +1028,34 @@ background-repeat: no-repeat, repeat-x !important;
 background-position: top, bottom !important;
 background-size: 100% 100%, 1200px 200px !important;
 }}
-
-/* Footer */
-.aqua-footer {{
-text-align: center;
-font-size: 0.72rem;
-color: {BRAND_TEXT}99;
-padding: 0.9rem 0 0.3rem 0;
-letter-spacing: 0.02em;
-}}
-.aqua-footer strong {{
-color: {BRAND_PRIMARY};
-font-weight: 700;
-}}
-
-/* Business hours banner — shown above the quick-contact buttons; not a chat message */
-.aqua-hours-banner {{
-display: flex;
-align-items: flex-start;
-gap: 0.55rem;
-background: {HOURS_BANNER_BG};
-border: 1px solid {HOURS_BANNER_BORDER};
-border-radius: 14px;
-padding: 0.65rem 0.9rem;
-margin-bottom: 0.85rem;
-color: {HOURS_BANNER_TEXT};
-font-size: 0.8rem;
-line-height: 1.45;
-animation: aquaFadeUp 0.3s ease-out;
-}}
-.aqua-hours-banner-icon {{
-flex-shrink: 0;
-font-size: 0.95rem;
-line-height: 1.4;
-}}
-/* Amber variant — shown during the closing-soon countdown window */
-.aqua-hours-banner-soon {{
-background: #FFF6E5;
-border-color: #F3CB80;
-color: #7A4A00;
-}}
-
-/* --- Auto-sizing layout ------------------------------------------------ */
-/* This app can be embedded ANYWHERE: a small popup chat widget on the
-NAWASA website, a full browser tab, a wide desktop window, or a narrow
-mobile screen. Rather than a fixed pixel width tuned for one context, the
-container below is fluid — it's sized as a percentage of whatever space
-it's actually given (vw units resolve against the real iframe/tab/window
-viewport it's placed in), clamped between a comfortable minimum and a
-readable maximum so text never stretches edge-to-edge on a huge screen or
-gets clipped in a tiny popup. Everything below (fonts, hero, tiles, nav
-tabs) scales continuously with clamp() rather than jumping at a single
-breakpoint, so it looks right at every size in between too. */
-html, body {{
-width: 100%;
-height: 100%;
-margin: 0;
-}}
-.stApp {{
-min-height: 100vh;
-width: 100%;
-}}
-#MainMenu, header[data-testid="stHeader"], footer {{
-visibility: hidden;
-height: 0;
-}}
+.aqua-footer {{ text-align: center; font-size: 0.72rem; color: {BRAND_TEXT}99; padding: 0.9rem 0 0.3rem 0; letter-spacing: 0.02em; }}
+.aqua-footer strong {{ color: {BRAND_PRIMARY}; font-weight: 700; }}
+.aqua-hours-banner {{ display: flex; align-items: flex-start; gap: 0.55rem; background: {HOURS_BANNER_BG}; border: 1px solid {HOURS_BANNER_BORDER}; border-radius: 14px; padding: 0.65rem 0.9rem; margin-bottom: 0.85rem; color: {HOURS_BANNER_TEXT}; font-size: 0.8rem; line-height: 1.45; animation: aquaFadeUp 0.3s ease-out; }}
+.aqua-hours-banner-icon {{ flex-shrink: 0; font-size: 0.95rem; line-height: 1.4; }}
+.aqua-hours-banner-soon {{ background: #FFF6E5; border-color: #F3CB80; color: #7A4A00; }}
+html, body {{ width: 100%; height: 100%; margin: 0; }}
+.stApp {{ min-height: 100vh; width: 100%; }}
+#MainMenu, header[data-testid="stHeader"], footer {{ visibility: hidden; height: 0; }}
 .block-container {{
-padding-top: clamp(0.8rem, 2vw, 1.2rem);
-padding-bottom: clamp(0.6rem, 1.5vw, 1rem);
-padding-left: clamp(0.6rem, 3vw, 1.5rem);
-padding-right: clamp(0.6rem, 3vw, 1.5rem);
-width: 100% !important;
-max-width: min(720px, 96vw) !important;
-margin-left: auto !important;
-margin-right: auto !important;
-box-sizing: border-box;
+padding-top: clamp(0.8rem, 2vw, 1.2rem); padding-bottom: clamp(0.6rem, 1.5vw, 1rem);
+padding-left: clamp(0.6rem, 3vw, 1.5rem); padding-right: clamp(0.6rem, 3vw, 1.5rem);
+width: 100% !important; max-width: min(720px, 96vw) !important; margin-left: auto !important; margin-right: auto !important; box-sizing: border-box;
 }}
-.aqua-hero-title, .aqua-dash-greeting {{
-font-size: clamp(1.25rem, 4vw, 1.7rem);
-}}
-.aqua-hero-subtitle, .aqua-dash-subtitle {{
-font-size: clamp(0.8rem, 2.2vw, 0.92rem);
-}}
-.aqua-login-title {{
-font-size: clamp(1.3rem, 4.5vw, 1.6rem);
-}}
-.aqua-tile-grid {{
-grid-template-columns: 1fr 1fr;
-}}
-.aqua-contact-row {{
-flex-wrap: wrap;
-}}
-.aqua-contact-card {{
-min-width: 90px;
-}}
-[data-testid="stTabs"] [data-baseweb="tab-list"] {{
-gap: 4px;
-}}
-[data-testid="stTabs"] [data-baseweb="tab"] {{
-border-radius: 12px 12px 0 0;
-font-weight: 600;
-}}
-/* Extra-narrow popups (e.g. a slim floating chat bubble) — tighten
-further so nothing overflows or wraps awkwardly. */
+.aqua-hero-title, .aqua-dash-greeting {{ font-size: clamp(1.25rem, 4vw, 1.7rem); }}
+.aqua-hero-subtitle, .aqua-dash-subtitle {{ font-size: clamp(0.8rem, 2.2vw, 0.92rem); }}
+.aqua-login-title {{ font-size: clamp(1.3rem, 4.5vw, 1.6rem); }}
+.aqua-contact-row {{ flex-wrap: wrap; }}
+.aqua-contact-card {{ min-width: 90px; }}
+[data-testid="stTabs"] [data-baseweb="tab-list"] {{ gap: 4px; }}
+[data-testid="stTabs"] [data-baseweb="tab"] {{ border-radius: 12px 12px 0 0; font-weight: 600; }}
 @media (max-width: 360px) {{
-.block-container {{
-padding-left: 0.45rem;
-padding-right: 0.45rem;
+.block-container {{ padding-left: 0.45rem; padding-right: 0.45rem; }}
+.aqua-hero {{ padding: 1.2rem 1.1rem 3rem 1.1rem; }}
+div[class*="st-key-aqua_nav_"] button {{ font-size: 0.68rem !important; padding: 0.25rem 0.1rem !important; }}
 }}
-.aqua-hero {{
-padding: 1.2rem 1.1rem 3rem 1.1rem;
-}}
-div[class*="st-key-aqua_nav_"] button {{
-font-size: 0.68rem !important;
-padding: 0.25rem 0.1rem !important;
-}}
-}}
-/* Roomy contexts (a full browser tab or a wide desktop window) — let the
-hero and text breathe a bit more instead of staying pinned to widget-sized
-spacing. */
 @media (min-width: 900px) {{
-.block-container {{
-padding-top: 2rem;
-padding-bottom: 1.8rem;
-}}
-.aqua-hero {{
-padding: 2.1rem 2.2rem 3.8rem 2.2rem;
-}}
+.block-container {{ padding-top: 2rem; padding-bottom: 1.8rem; }}
+.aqua-hero {{ padding: 2.1rem 2.2rem 3.8rem 2.2rem; }}
 }}
 </style>"""
 
@@ -1864,16 +1070,11 @@ st.markdown(
 )
 
 # ---------------------------------------------------------------------------
-# LOGIN / WELCOME GATE — first screen on a fresh session.
-# Only two inputs required: territory and API key, per client spec. There is
-# no user-account system (no passwords, no database) — see the note at the
-# top of this file about what "log in" does and doesn't mean here.
+# LOGIN / WELCOME GATE
 # ---------------------------------------------------------------------------
 if not st.session_state.auth_done:
     st.markdown('<div class="aqua-login-wrap">', unsafe_allow_html=True)
 
-    # Centered NAWASA logo (falls back to a styled text badge if
-    # nawasa_logo.png isn't found next to app.py).
     st.markdown(f"""<div class="aqua-login-header">
 <div class="aqua-login-header-center">
 {nawasa_logo_tag(72)}
@@ -1906,8 +1107,8 @@ if not st.session_state.auth_done:
             st.session_state.auth_done = True
             st.rerun()
 
-    st.markdown('</div>', unsafe_allow_html=True)  # aqua-card
-    st.markdown('</div>', unsafe_allow_html=True)  # aqua-login-wrap
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
 api_key = st.session_state.api_key
@@ -2013,6 +1214,12 @@ with st.sidebar:
         st.caption("⏳ Live closing-soon countdown: enabled")
     else:
         st.caption("⏳ Live closing-soon countdown: not installed (add `streamlit-autorefresh` to requirements.txt for auto-ticking; the count is still correct on every interaction without it)")
+    if get_pinecone_index() is not None:
+        st.caption("📚 Knowledge base retrieval (Pinecone): enabled")
+    elif HAS_PINECONE:
+        st.caption("📚 Knowledge base retrieval: installed, but PINECONE_API_KEY / PINECONE_INDEX_NAME not set")
+    else:
+        st.caption("📚 Knowledge base retrieval: not installed (add `pinecone` to requirements.txt to enable)")
 
 # ===========================================================================
 # STAFF PORTAL
@@ -2061,8 +1268,6 @@ if mode == "🔐 Staff Portal":
     else:
         st.metric("Total reports", len(reports_df))
 
-        # --- Status breakdown — quick counts per stage, matching the same
-        # colored legend used on the incident map and the tracker. ---
         STATUS_EMOJI = {"Received": "🔴", "Assigned": "🟠", "Crew Dispatched": "🟠",
                          "In Progress": "🔵", "Resolved": "🟢"}
         status_counts = reports_df["status"].value_counts().to_dict()
@@ -2071,7 +1276,6 @@ if mode == "🔐 Staff Portal":
             with scol:
                 st.metric(f"{STATUS_EMOJI.get(stage, '⚪')} {stage}", status_counts.get(stage, 0))
 
-        # --- Incident map: every report with a pinned GPS location, color-coded by status ---
         st.markdown(f'<div class="aqua-section-label">{t("staff_map_label")}</div>', unsafe_allow_html=True)
         if HAS_MAP:
             STATUS_COLORS = {
@@ -2125,9 +1329,6 @@ if mode == "🔐 Staff Portal":
             edited_df.to_csv(REPORTS_PATH, index=False)
             st.success("Statuses updated.")
 
-        # --- Quick status update — pick one report by reference and move it
-        # to a new stage, without having to find/edit its row in the grid
-        # above. Uses the same colored stage labels as the tracker/map. ---
         st.markdown('<div class="aqua-section-label">🔄 Update a report status</div>', unsafe_allow_html=True)
         STATUS_DISPLAY = {s: f"{STATUS_EMOJI.get(s, '⚪')} {s}" for s in STATUS_STAGES}
         with st.form("quick_status_form"):
@@ -2157,13 +1358,6 @@ if mode == "🔐 Staff Portal":
             if notif_df is not None and not notif_df.empty:
                 st.dataframe(notif_df, use_container_width=True)
 
-                # --- Contact subscribers --------------------------------
-                # There's no SMS/email provider (e.g. Twilio, SendGrid)
-                # wired up in this app by default, but a manual/testing
-                # SMTP auto-sender is available below — see
-                # send_notification_email(). Credentials are typed in each
-                # session and kept only in st.session_state, never written
-                # to disk or the source file.
                 st.markdown(f'<div class="aqua-section-label">📣 Contact subscribers</div>', unsafe_allow_html=True)
 
                 with st.expander("🧪 Auto-send email (testing)"):
@@ -2253,8 +1447,6 @@ if mode == "🔐 Staff Portal":
             else:
                 st.caption("No subscribers yet.")
 
-    # --- Outage announcements: staff posts these; matching customers see a
-    # banner in-app for their selected parish while the date range is active. ---
     st.markdown(f'<div class="aqua-section-label">{t("outage_section_label")}</div>', unsafe_allow_html=True)
     with st.form("outage_form", clear_on_submit=True):
         outage_parish = st.selectbox(t("outage_parish_label"), GRENADA_PARISHES, key="outage_parish_select")
@@ -2305,8 +1497,7 @@ if not api_key:
     st.stop()
 
 # ---------------------------------------------------------------------------
-# Initialize client + chat session (recreated when key, territory, or the
-# active chat session changes)
+# Initialize client + chat session
 # ---------------------------------------------------------------------------
 if ("chat" not in st.session_state
         or st.session_state.get("_key_used") != api_key
@@ -2316,8 +1507,6 @@ if ("chat" not in st.session_state
         client = genai.Client(api_key=api_key)
         st.session_state.client = client
 
-        # Reseed history from the active chat session's transcript, if any,
-        # so switching back to an older chat can still be continued.
         seed_history = []
         for m in st.session_state.messages:
             if m["role"] in ("user", "assistant") and isinstance(m.get("content"), str):
@@ -2335,8 +1524,6 @@ if ("chat" not in st.session_state
         try:
             st.session_state.chat = client.chats.create(history=seed_history, **chat_kwargs)
         except TypeError:
-            # Older SDK versions may not accept `history=` — fall back to a
-            # fresh session; the displayed transcript is unaffected either way.
             st.session_state.chat = client.chats.create(**chat_kwargs)
 
         st.session_state._key_used = api_key
@@ -2381,17 +1568,11 @@ contact_row_html = f"""<div class="aqua-contact-row">
 
 # ===========================================================================
 # PORTAL — Chat / FAQ / Report & Track / History / Settings
-# This is a compact popup widget embedded on the NAWASA website, so the
-# customer lands directly in the tabbed portal — there's no separate Home
-# dashboard screen to pass through first.
 # ===========================================================================
 st.markdown('<div class="aqua-page">', unsafe_allow_html=True)
 
 hours_status = get_business_hours_status()
 
-# While the office is within the closing-soon window, keep the countdown
-# ticking on its own (every 60s) instead of only updating on the next
-# click/message — see HAS_AUTOREFRESH note above for the no-package fallback.
 if hours_status["is_open"] and hours_status["closing_soon"] and HAS_AUTOREFRESH:
     st_autorefresh(interval=60000, key="aqua_closing_soon_autorefresh")
 
@@ -2436,15 +1617,6 @@ nav_cols = st.columns(len(NAV_ITEMS))
 for col, (key, label) in zip(nav_cols, NAV_ITEMS):
     with col:
         is_active_nav = st.session_state.active_portal_tab == key
-        # st.container(key=...) is the officially supported way to get a
-        # real CSS hook in Streamlit (it adds a genuine class to a REAL
-        # wrapping div around whatever is rendered inside the `with`
-        # block) — unlike st.markdown('<div>')/st.button()/st.markdown('</div>'),
-        # which does NOT actually nest the button inside that div (each
-        # st.markdown call renders as its own isolated block), so that
-        # pattern's CSS never reached the button at all. Naming the key
-        # with an "_active" suffix only when this is the selected tab lets
-        # the CSS below match active vs. inactive via a substring selector.
         container_key = f"aqua_nav_{key}_active" if is_active_nav else f"aqua_nav_{key}"
         with st.container(key=container_key):
             if st.button(label, key=f"nav_{key}", use_container_width=True):
@@ -2619,7 +1791,18 @@ if active_tab == "chat":
                 else:
                     with st.spinner("Thinking..."):
                         try:
-                            bot_response = st.session_state.chat.send_message(message_parts if message_parts else cleaned_input)
+                            # --- Pinecone retrieval: ground the reply in the
+                            # NAWASA knowledge base before sending to Gemini.
+                            retrieved_context = retrieve_nawasa_knowledge(cleaned_input) if cleaned_input else ""
+                            send_parts = list(message_parts) if message_parts else [cleaned_input]
+                            if retrieved_context:
+                                send_parts.insert(0, (
+                                    "[Reference material from the NAWASA knowledge base — use this "
+                                    "to answer accurately if it's relevant to the customer's question. "
+                                    "Don't quote it verbatim or mention you're using reference material.]\n"
+                                    f"{retrieved_context}"
+                                ))
+                            bot_response = st.session_state.chat.send_message(send_parts)
                             reply_text = bot_response.text
                         except Exception as e:
                             reply_text = f"⚠️ Error: {e}"
@@ -2683,10 +1866,6 @@ elif active_tab == "faq":
 <b>{f['q']}</b><br>{f['a']}
 </div>"""
                 st.markdown(faq_html, unsafe_allow_html=True)
-                # Key is index-based (not sliced question text) — two FAQ
-                # items with the same first ~20 characters, especially after
-                # translation, previously collided on the same widget key
-                # and crashed the app with StreamlitDuplicateElementKey.
                 if HAS_TTS and st.button(f"🔊 Read aloud", key=f"faq_audio_{cat}_{faq_idx}"):
                     audio = speak_text(f["a"], "en")
                     if audio:
@@ -2696,7 +1875,6 @@ elif active_tab == "faq":
 elif active_tab == "report":
     st.markdown(f'<div class="aqua-section-label">{t("report_issue")}</div>', unsafe_allow_html=True)
 
-    # --- Grenada location picker: parish + landmark + physical (terrain) map pin ---
     st.markdown(f'<div class="aqua-section-label">{t("map_section_label")}</div>', unsafe_allow_html=True)
     st.markdown('<div class="aqua-card">', unsafe_allow_html=True)
 
@@ -2721,28 +1899,15 @@ elif active_tab == "report":
     gps_col, hint_col = st.columns([1, 2])
     with gps_col:
         if HAS_GEOLOCATION:
-            # streamlit_geolocation renders its OWN clickable icon and needs a
-            # direct user click on that icon to trigger the browser's location
-            # permission prompt — wrapping it inside a separate st.button meant
-            # the component wasn't even mounted until after that button's
-            # click, so the real "grant location" click never landed on it.
-            # Rendering it directly here fixes that in one click.
             st.caption(t("map_gps_button"))
             gps_coords = streamlit_geolocation()
             if gps_coords and gps_coords.get("latitude") is not None:
                 new_pin = {"lat": gps_coords["latitude"], "lng": gps_coords["longitude"]}
-                # Only update + rerun when the coords actually changed, or
-                # every script run would loop forever since the component
-                # keeps returning its last known value.
                 if new_pin != st.session_state.get("_last_gps_pin"):
                     st.session_state.report_pin = new_pin
                     st.session_state["_last_gps_pin"] = new_pin
                     st.rerun()
             elif gps_coords and gps_coords.get("latitude") is None:
-                # The component returned SOMETHING but no coordinates — this
-                # is almost always the browser denying/blocking location
-                # rather than a bug in this code, so surface whatever the
-                # browser told us instead of failing silently.
                 gps_error_detail = gps_coords.get("message") or gps_coords.get("error") or str(gps_coords)
                 st.caption(f"⚠️ Location unavailable: {gps_error_detail}")
                 st.caption(
@@ -2799,9 +1964,6 @@ elif active_tab == "report":
 
     st.markdown('<div class="aqua-card">', unsafe_allow_html=True)
     with st.expander(t("report_form_expander"), expanded=True):
-        # Photo upload lives OUTSIDE the form so the "Analyze severity" button
-        # can call Gemini vision and rerun immediately — widgets inside a
-        # st.form only take effect when the form itself is submitted.
         r_attachment = st.file_uploader(t("field_attachment"),
                                           type=["jpg", "jpeg", "png", "mp4", "mov", "pdf", "doc", "docx"],
                                           key="report_attachment_uploader")
@@ -2924,13 +2086,6 @@ elif active_tab == "settings":
         key="settings_customer_parish",
     )
 
-    # These values feed BRAND_* / BASE_FONT_SIZE in the CSS block computed
-    # near the top of the script — that computation already happened earlier
-    # in THIS run, using the values from before this widget block executed.
-    # Without an explicit rerun here, a change wouldn't actually take visual
-    # effect until some unrelated later interaction triggered the next run.
-    # Rerunning immediately makes dark mode / high contrast / large text /
-    # parish selection apply the moment the customer toggles them.
     settings_changed = (
         new_dark_mode != st.session_state.dark_mode
         or new_high_contrast != st.session_state.high_contrast
