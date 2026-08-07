@@ -10,6 +10,7 @@ Run with:
 Folder layout expected:
     app.py
     assets/aquaassist_logo.png
+    assets/aquaassist_avatar.png (chat-bubble avatar only — see AVATAR_PATH)
     assets/nawasa_logo.png    (the official NAWASA authority logo, shown on
                                 the login screen, header, and dashboard.)
     .streamlit/config.toml
@@ -107,6 +108,11 @@ STAFF_PASSCODE = os.environ.get("STAFF_PASSCODE", "changeme123")
 # Page config
 # ---------------------------------------------------------------------------
 LOGO_PATH = os.path.join("assets", "aquaassist_logo.png")
+# Chat-bubble-only avatar. Kept separate from LOGO_PATH so the header, page
+# icon, and sidebar can keep the main AquaAssist logo while only the chat
+# message avatars use this image. Falls back to the 💧 emoji if the file
+# isn't present at this path yet.
+AVATAR_PATH = os.path.join("assets", "aquaassist_avatar.png")
 # Official NAWASA authority logo — shown on the login screen, chatbot
 # header, and welcome dashboard. Resolved relative to this file's own
 # folder (Path(__file__).parent) rather than the process's current working
@@ -2479,7 +2485,7 @@ if active_tab == "chat":
         )
     st.markdown(contact_row_html, unsafe_allow_html=True)
 
-    ASSISTANT_AVATAR = LOGO_PATH if os.path.exists(LOGO_PATH) else "💧"
+    ASSISTANT_AVATAR = AVATAR_PATH if os.path.exists(AVATAR_PATH) else "💧"
     USER_AVATAR = "🧑"
 
     for msg in st.session_state.messages:
