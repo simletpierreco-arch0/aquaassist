@@ -348,6 +348,7 @@ st.set_page_config(
     page_title="AquaAssist",
     page_icon=LOGO_PATH if os.path.exists(LOGO_PATH) else "💧",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 # ---------------------------------------------------------------------------
@@ -1148,7 +1149,9 @@ div[data-testid="stAlertContainer"]:has(svg[data-testid="stIconMaterial"]) {{ al
 [data-testid="stNotificationContentInfo"] {{ color: {BRAND_PRIMARY} !important; }}
 html, body {{ width: 100%; height: 100%; margin: 0; }}
 .stApp {{ min-height: 100vh; width: 100%; }}
-#MainMenu, header[data-testid="stHeader"], footer {{ visibility: hidden; height: 0; }}
+#MainMenu, footer {{ visibility: hidden; height: 0; }}
+header[data-testid="stHeader"] {{ background: transparent; height: 2.5rem; }}
+header[data-testid="stHeader"] * {{ visibility: visible; }}
 .block-container {{
 padding-top: clamp(0.8rem, 2vw, 1.2rem); padding-bottom: clamp(0.6rem, 1.5vw, 1rem);
 padding-left: clamp(0.6rem, 3vw, 1.5rem); padding-right: clamp(0.6rem, 3vw, 1.5rem);
