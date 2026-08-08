@@ -918,6 +918,29 @@ _RIPPLE_BG_SVG = (
     "%3C/svg%3E"
 )
 
+# Very light, slow-drifting bubble/particle field for the main app background.
+# Kept deliberately faint (low opacity, large tile, slow animation) so it
+# reads as ambient texture behind the existing content rather than a busy
+# pattern — per the "subtle, premium, not a huge ocean photo" brief.
+def _bubble(cx_, cy_, r_, opacity, color):
+    c = color.replace('#', '%23')
+    return (f"%3Ccircle%20cx='{cx_}'%20cy='{cy_}'%20r='{r_}'%20fill='{c}'%20fill-opacity='{opacity}'/%3E"
+             f"%3Ccircle%20cx='{cx_ - r_*0.35}'%20cy='{cy_ - r_*0.35}'%20r='{r_*0.28}'%20fill='%23FFFFFF'%20fill-opacity='{opacity*1.6}'/%3E")
+
+_BUBBLES_BG_SVG = (
+    "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20"
+    "viewBox='0%200%20500%20500'%3E"
+    + _bubble(60, 430, 16, 0.05, BRAND_ACCENT)
+    + _bubble(150, 140, 10, 0.045, BRAND_PRIMARY)
+    + _bubble(260, 360, 22, 0.04, BRAND_ACCENT)
+    + _bubble(340, 90, 8, 0.05, BRAND_ACCENT)
+    + _bubble(420, 300, 14, 0.045, BRAND_PRIMARY)
+    + _bubble(460, 460, 11, 0.05, BRAND_ACCENT)
+    + _bubble(40, 220, 7, 0.045, BRAND_PRIMARY)
+    + _bubble(200, 470, 9, 0.04, BRAND_ACCENT)
+    + "%3C/svg%3E"
+)
+
 CSS_BLOCK = f"""<style>
 html, body, [class*="css"] {{
 font-family: 'Poppins', 'Inter', sans-serif;
@@ -930,6 +953,22 @@ background-repeat: no-repeat, repeat-x;
 background-position: top, bottom;
 background-size: 100% 420px, 1200px 200px;
 background-attachment: fixed, fixed;
+position: relative;
+}}
+@keyframes aquaBubbleDrift {{
+from {{ background-position: 0px 0px; }}
+to {{ background-position: -500px -900px; }}
+}}
+.stApp::before {{
+content: "";
+position: fixed;
+inset: 0;
+background-image: url("{_BUBBLES_BG_SVG}");
+background-repeat: repeat;
+background-size: 500px 500px;
+animation: aquaBubbleDrift 70s linear infinite;
+pointer-events: none;
+z-index: -1;
 }}
 ::-webkit-scrollbar {{ width: 8px; height: 8px; }}
 ::-webkit-scrollbar-track {{ background: {BRAND_BG}; }}
