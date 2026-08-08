@@ -22,6 +22,18 @@ Folder layout expected:
 BEFORE DEPLOYING:
     STAFF_PASSCODE -> replace "changeme123" below, or set as env var / Streamlit secret
 
+CONFIG VIA ENV VARS OR STREAMLIT SECRETS:
+    All of GEMINI_API_KEY, STAFF_PASSCODE, PINECONE_API_KEY, PINECONE_INDEX_NAME,
+    and PINECONE_NAMESPACE can be set either as real OS environment variables
+    (os.environ) OR via Streamlit Cloud's Settings -> Secrets panel / a local
+    .streamlit/secrets.toml file (st.secrets). Both are checked, with
+    os.environ taking priority if both happen to be set. On Streamlit
+    Community Cloud, use the Secrets panel — plain TOML key = "value" pairs,
+    e.g.:
+        GEMINI_API_KEY = "your-real-key"
+        PINECONE_API_KEY = "your-real-key"
+        PINECONE_INDEX_NAME = "your-index-name"
+
 LANGUAGE: the interface and every AI reply are always Standard English. The
 AI still fully understands Grenadian Creole/patois if a customer types in
 it — see build_system_instruction() — it simply never replies in it.
@@ -106,11 +118,26 @@ except ImportError:
     HAS_PINECONE = False
 
 # ---------------------------------------------------------------------------
+# Config helper — checks a real OS env var first, then falls back to
+# Streamlit secrets (works both locally with .streamlit/secrets.toml and on
+# Streamlit Community Cloud's Settings -> Secrets panel). Never raises even
+# if no secrets.toml exists at all.
+# ---------------------------------------------------------------------------
+def get_config(key, default=""):
+    val = os.environ.get(key)
+    if val:
+        return val
+    try:
+        return st.secrets.get(key, default)
+    except Exception:
+        return default
+
+# ---------------------------------------------------------------------------
 # NAWASA contact details
 # ---------------------------------------------------------------------------
 NAWASA_PHONE = "(473) 440-2155"
 NAWASA_WEBSITE = "https://nawasa.gd/"
-STAFF_PASSCODE = os.environ.get("STAFF_PASSCODE", "changeme123")
+STAFF_PASSCODE = get_config("STAFF_PASSCODE", "changeme123")
 
 # ---------------------------------------------------------------------------
 # Pinecone knowledge retrieval — OPTIONAL. If PINECONE_API_KEY /
@@ -119,7 +146,7 @@ STAFF_PASSCODE = os.environ.get("STAFF_PASSCODE", "changeme123")
 # only, exactly like before.
 #
 # PINECONE_INDEX_NAME -> set this to the EXACT index name you created
-# (e.g. "quickstart").
+# (e.g. "aquaassist-nawasa").
 # PINECONE_NAMESPACE  -> leave "" unless you upserted into a namespace.
 #
 # Handles BOTH common Pinecone setups automatically:
@@ -128,9 +155,9 @@ STAFF_PASSCODE = os.environ.get("STAFF_PASSCODE", "changeme123")
 #   Path B: an index you embedded yourself (e.g. with Gemini's
 #           text-embedding-004) before upserting.
 # ---------------------------------------------------------------------------
-PINECONE_API_KEY = os.environ.get("pcsk_2a2QEh_SjAcjHXcdmQvgrgRpqJorum5dbqLuqgktfcfvyisWwmN1w7jaCLDTfyd1hq5LY8") or st.secrets.get("pcsk_2a2QEh_SjAcjHXcdmQvgrgRpqJorum5dbqLuqgktfcfvyisWwmN1w7jaCLDTfyd1hq5LY8", "")
-PINECONE_INDEX_NAME = os.environ.get("aquaassist-nawasa") or st.secrets.get("aquaassist-nawasa", "")
-PINECONE_NAMESPACE = os.environ.get("PINECONE_NAMESPACE") or st.secrets.get("PINECONE_NAMESPACE", "")
+PINECONE_API_KEY = get_config("PINECONE_API_KEY", "")
+PINECONE_INDEX_NAME = get_config("PINECONE_INDEX_NAME", "")
+PINECONE_NAMESPACE = get_config("PINECONE_NAMESPACE", "")
 
 @st.cache_resource
 def get_pinecone_index():
@@ -311,7 +338,7 @@ defaults = {
     "auth_done": False,            # True once the customer submits territory + API key
     "territory": "Grenada",
     "customer_name": "",
-    "api_key": os.environ.get("GEMINI_API_KEY", ""),
+    "api_key": get_config("GEMINI_API_KEY", ""),
     "dark_mode": False,
     "high_contrast": False,
     "large_text": False,
@@ -472,7 +499,7 @@ FAQS = [
     {"category": "General", "q": "What does NAWASA mean?",
      "a": "National Water & Sewerage Authority."},
     {"category": "General", "q": "Where is NAWASA's main office?",
- "a": "NAWASA's main office is now located on Lucas Street, St. George's (previously on the Carenage). Sub-offices are located at Seaton James Street, Grenville; Lower Depradine Street, Gouyave; and additional sub-offices in Sauteurs, St. David's, and Grand Anse."},
+     "a": "NAWASA's main office is now located on Lucas Street, St. George's (previously on the Carenage). Sub-offices are located at Seaton James Street, Grenville; Lower Depradine Street, Gouyave; and additional sub-offices in Sauteurs, St. David's, and Grand Anse."},
 ]
 
 
@@ -799,6 +826,7 @@ Use the following facts to answer user questions:
 - Provide NAWASA customer service contact information and transfer users to a representative when requested.
 - If the issue is an emergency, advise the user to contact NAWASA immediately at (473) 440-2155.
 - NAWASA's official contact details: Phone (473) 440-2155, WhatsApp via {territory_whatsapp} (this is the number for {territory}), Website https://nawasa.gd/.
+- NAWASA's main office is now located on Lucas Street, St. George's (it moved from its former, over 150-year-old building on the Carenage). Sub-offices are located at Seaton James Street, Grenville; Lower Depradine Street, Gouyave; and additional sub-offices in Sauteurs, St. David's, and Grand Anse.
 - When a customer describes a specific problem and gives at least a location, log it immediately using the log_water_report tool — do not tell the customer to fill out a separate form themselves.
 - If the customer attaches a photo or video of the issue, look at it before calling log_water_report and set severity based on what you actually see.
 - Use natural understanding, not keyword matching.
