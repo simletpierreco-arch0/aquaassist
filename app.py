@@ -128,9 +128,9 @@ STAFF_PASSCODE = os.environ.get("STAFF_PASSCODE", "changeme123")
 #   Path B: an index you embedded yourself (e.g. with Gemini's
 #           text-embedding-004) before upserting.
 # ---------------------------------------------------------------------------
-PINECONE_API_KEY = os.environ.get("pcsk_2a2QEh_SjAcjHXcdmQvgrgRpqJorum5dbqLuqgktfcfvyisWwmN1w7jaCLDTfyd1hq5LY8", "")
-PINECONE_INDEX_NAME = os.environ.get("aquaassist-nawasa", "")
-PINECONE_NAMESPACE = os.environ.get("nawasa", "")
+PINECONE_API_KEY = os.environ.get("pcsk_2a2QEh_SjAcjHXcdmQvgrgRpqJorum5dbqLuqgktfcfvyisWwmN1w7jaCLDTfyd1hq5LY8") or st.secrets.get("pcsk_2a2QEh_SjAcjHXcdmQvgrgRpqJorum5dbqLuqgktfcfvyisWwmN1w7jaCLDTfyd1hq5LY8", "")
+PINECONE_INDEX_NAME = os.environ.get("aquaassist-nawasa") or st.secrets.get("aquaassist-nawasa", "")
+PINECONE_NAMESPACE = os.environ.get("PINECONE_NAMESPACE") or st.secrets.get("PINECONE_NAMESPACE", "")
 
 @st.cache_resource
 def get_pinecone_index():
@@ -472,7 +472,7 @@ FAQS = [
     {"category": "General", "q": "What does NAWASA mean?",
      "a": "National Water & Sewerage Authority."},
     {"category": "General", "q": "Where is NAWASA's main office?",
-     "a": "The main office is on the Carenage, St. George's, with sub-offices in Gouyave, Grenville, Sauteurs, St. David's, and Grand Anse."},
+ "a": "NAWASA's main office is now located on Lucas Street, St. George's (previously on the Carenage). Sub-offices are located at Seaton James Street, Grenville; Lower Depradine Street, Gouyave; and additional sub-offices in Sauteurs, St. David's, and Grand Anse."},
 ]
 
 
