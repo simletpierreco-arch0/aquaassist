@@ -7,4 +7,3 @@ streamlit-geolocation
 audio-recorder-streamlit
 gTTS
 streamlit-autorefresh
-pinecone-client
