@@ -346,7 +346,8 @@ def get_business_hours_status():
 
 st.set_page_config(
     page_title="AquaAssist",
-    page_icon=LOGO_PATH if os.path.exists(LOGO_PATH) else "user_avatar.png.jpg",
+    page_icon=LOGO_PATH if os.path.exists(LOGO_PATH) else "💧",
+    page_icon=LOGO_PATH if os.path.exists(LOGO_PATH) else "user_avatar.png.jpg"
     layout="wide",
     initial_sidebar_state="expanded",
 )
