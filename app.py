@@ -1606,6 +1606,21 @@ if "active_portal_tab" not in st.session_state:
 def go_to(portal_tab):
     st.session_state.active_portal_tab = portal_tab
 
+def _build_composed_location():
+    """Builds the Location field text from the currently selected parish,
+    landmark, and pinned GPS coordinates. Shared by the GPS button, the
+    interactive map click/drag, and the manual lat/lng inputs so all three
+    ways of setting a location sync into the report form's Location field
+    the same way, without the customer needing to type anything."""
+    parts = [
+        st.session_state.get("report_landmark", "").strip() if st.session_state.get("report_landmark") else "",
+        st.session_state.get("report_parish", ""),
+    ]
+    pin = st.session_state.get("report_pin", {"lat": GRENADA_CENTER[0], "lng": GRENADA_CENTER[1]})
+    loc = ", ".join([p for p in parts if p])
+    loc += f" (GPS: {pin['lat']:.5f}, {pin['lng']:.5f})"
+    return loc
+
 logo_html = f'<img src="data:image/png;base64,{logo_b64}" />' if logo_b64 else "💧"
 
 if not api_key:
@@ -2022,6 +2037,12 @@ elif active_tab == "report":
                 if new_pin != st.session_state.get("_last_gps_pin"):
                     st.session_state.report_pin = new_pin
                     st.session_state["_last_gps_pin"] = new_pin
+                    # Push the new coordinates straight into the report form's
+                    # Location field so the customer sees it update immediately,
+                    # without needing to touch that field themselves.
+                    _new_loc = _build_composed_location()
+                    st.session_state["report_location_field"] = _new_loc
+                    st.session_state["_last_composed_location"] = _new_loc
                     st.rerun()
             elif gps_coords and gps_coords.get("latitude") is None:
                 gps_error_detail = gps_coords.get("message") or gps_coords.get("error") or str(gps_coords)
@@ -2055,6 +2076,9 @@ elif active_tab == "report":
                 round(st.session_state.report_pin["lat"], 6), round(st.session_state.report_pin["lng"], 6)
             ):
                 st.session_state.report_pin = {"lat": new_lat, "lng": new_lng}
+                _new_loc = _build_composed_location()
+                st.session_state["report_location_field"] = _new_loc
+                st.session_state["_last_composed_location"] = _new_loc
                 st.rerun()
         st.caption(f"📍 {t('map_pinned_caption')}: {st.session_state.report_pin['lat']:.4f}, {st.session_state.report_pin['lng']:.4f}")
     else:
@@ -2071,12 +2095,14 @@ elif active_tab == "report":
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    _composed_location_parts = [
-        st.session_state.report_landmark.strip() if st.session_state.report_landmark else "",
-        st.session_state.report_parish,
-    ]
-    composed_location = ", ".join([p for p in _composed_location_parts if p])
-    composed_location += f" (GPS: {st.session_state.report_pin['lat']:.5f}, {st.session_state.report_pin['lng']:.5f})"
+    composed_location = _build_composed_location()
+    # Whenever the underlying parish, landmark, or pin changes (via GPS, map
+    # click, or the manual lat/lng fallback inputs), push the refreshed
+    # location straight into the report form's Location field so it updates
+    # automatically instead of requiring the customer to retype it.
+    if st.session_state.get("_last_composed_location") != composed_location:
+        st.session_state["report_location_field"] = composed_location
+        st.session_state["_last_composed_location"] = composed_location
 
     st.markdown('<div class="aqua-card">', unsafe_allow_html=True)
     with st.expander(t("report_form_expander"), expanded=True):
@@ -2113,7 +2139,7 @@ elif active_tab == "report":
         with st.form("leak_report_form", clear_on_submit=True):
             r_name = st.text_input(t("field_name"), value=st.session_state.customer_name)
             r_phone = st.text_input(t("field_phone"))
-            r_location = st.text_input(t("field_location"), value=composed_location)
+            r_location = st.text_input(t("field_location"), value=composed_location, key="report_location_field")
 
             issue_type_keys = ["issue_leak", "issue_no_water", "issue_low_pressure", "issue_billing",
                                 "issue_burst", "issue_hydrant", "issue_quality", "issue_other"]
