@@ -2052,6 +2052,16 @@ elif active_tab == "report":
     st.markdown(f'<div class="aqua-section-label">{t("map_section_label")}</div>', unsafe_allow_html=True)
     st.markdown('<div class="aqua-card">', unsafe_allow_html=True)
 
+    # Apply any parish auto-detected from a map click or GPS fix on the
+    # previous run. This MUST happen before the Parish selectbox below is
+    # instantiated — Streamlit only allows writing to a widget's own
+    # session-state key prior to that widget being created in the current
+    # script run; writing to it afterwards (e.g. from the map-click handler
+    # further down, which runs after this selectbox) raises a
+    # StreamlitAPIException.
+    if st.session_state.get("_pending_parish"):
+        st.session_state["report_parish_select"] = st.session_state.pop("_pending_parish")
+
     pick_col1, pick_col2 = st.columns(2)
     with pick_col1:
         default_parish_idx = (
@@ -2081,11 +2091,14 @@ elif active_tab == "report":
                     st.session_state.report_pin = new_pin
                     st.session_state["_last_gps_pin"] = new_pin
                     # Auto-fill the Parish dropdown from the nearest parish
-                    # center, and set the widget's own session-state key too
-                    # so the selectbox picks it up on the next render.
+                    # center. Stage it in _pending_parish rather than writing
+                    # report_parish_select directly — that widget was already
+                    # instantiated earlier in this run, so Streamlit would
+                    # reject a direct write; the staged value is applied at
+                    # the top of this tab on the next run instead.
                     _detected_parish = _nearest_parish(new_pin["lat"], new_pin["lng"])
                     st.session_state.report_parish = _detected_parish
-                    st.session_state["report_parish_select"] = _detected_parish
+                    st.session_state["_pending_parish"] = _detected_parish
                     # Push the new coordinates straight into the report form's
                     # Location field so the customer sees it update immediately,
                     # without needing to touch that field themselves.
@@ -2126,11 +2139,14 @@ elif active_tab == "report":
             ):
                 st.session_state.report_pin = {"lat": new_lat, "lng": new_lng}
                 # Auto-fill the Parish dropdown from the nearest parish
-                # center, and set the widget's own session-state key too
-                # so the selectbox picks it up on the next render.
+                # center. Stage it in _pending_parish rather than writing
+                # report_parish_select directly — that widget was already
+                # instantiated earlier in this run, so Streamlit would
+                # reject a direct write; the staged value is applied at
+                # the top of this tab on the next run instead.
                 _detected_parish = _nearest_parish(new_lat, new_lng)
                 st.session_state.report_parish = _detected_parish
-                st.session_state["report_parish_select"] = _detected_parish
+                st.session_state["_pending_parish"] = _detected_parish
                 _new_loc = _build_composed_location()
                 st.session_state["report_location_field"] = _new_loc
                 st.session_state["_last_composed_location"] = _new_loc
