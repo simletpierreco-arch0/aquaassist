@@ -994,18 +994,6 @@ _BLOBS_BG_SVG = (
     "%3C/svg%3E"
 )
 
-_RIPPLE_BG_SVG = (
-    "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20"
-    "viewBox='0%200%20300%20300'%3E"
-    "%3Ccircle%20cx='150'%20cy='150'%20r='40'%20fill='none'%20"
-    f"stroke='{BRAND_ACCENT.replace('#', '%23')}'%20stroke-opacity='0.20'%20stroke-width='2'/%3E"
-    "%3Ccircle%20cx='150'%20cy='150'%20r='80'%20fill='none'%20"
-    f"stroke='{BRAND_ACCENT.replace('#', '%23')}'%20stroke-opacity='0.14'%20stroke-width='2'/%3E"
-    "%3Ccircle%20cx='150'%20cy='150'%20r='120'%20fill='none'%20"
-    f"stroke='{BRAND_ACCENT.replace('#', '%23')}'%20stroke-opacity='0.09'%20stroke-width='2'/%3E"
-    "%3C/svg%3E"
-)
-
 # Very light, slow-drifting bubble/particle field for the main app background.
 # Kept deliberately faint (low opacity, large tile, slow animation) so it
 # reads as ambient texture behind the existing content rather than a busy
@@ -1042,20 +1030,19 @@ background-color: {BRAND_BG};
 background-image:
 radial-gradient(ellipse 900px 500px at 50% -10%, {BRAND_ACCENT}22 0%, transparent 60%),
 url("{_BLOBS_BG_SVG}"),
-url("{_RIPPLE_BG_SVG}"),
 linear-gradient(180deg, {BRAND_BG_SOFT} 0%, {BRAND_BG} 45%),
 url("{_WAVE_BG_SVG}");
-background-repeat: no-repeat, no-repeat, repeat, no-repeat, repeat-x;
-background-position: top, 50% 50%, center, top, bottom;
-background-size: 100% 100%, 120% 120%, 640px 640px, 100% 420px, 1200px 200px;
-background-attachment: fixed, fixed, fixed, fixed, fixed;
+background-repeat: no-repeat, no-repeat, no-repeat, repeat-x;
+background-position: top, 50% 50%, top, bottom;
+background-size: 100% 100%, 120% 120%, 100% 420px, 1200px 200px;
+background-attachment: fixed, fixed, fixed, fixed;
 animation: aquaBlobDrift 46s ease-in-out infinite;
 position: relative;
 }}
 @keyframes aquaBlobDrift {{
-0% {{ background-position: top, 48% 47%, center, top, bottom; }}
-50% {{ background-position: top, 53% 53%, center, top, bottom; }}
-100% {{ background-position: top, 48% 47%, center, top, bottom; }}
+0% {{ background-position: top, 48% 47%, top, bottom; }}
+50% {{ background-position: top, 53% 53%, top, bottom; }}
+100% {{ background-position: top, 48% 47%, top, bottom; }}
 }}
 @keyframes aquaBubbleDrift {{
 from {{ background-position: 0px 0px; }}
