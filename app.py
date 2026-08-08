@@ -915,9 +915,20 @@ USER_BUBBLE_BG = "#D9F3FF"
 USER_BUBBLE_TEXT = "#003B5C"
 ASSISTANT_BUBBLE_BORDER = f"{BRAND_PRIMARY}33"
 ASSISTANT_BUBBLE_TEXT = BRAND_TEXT
-HOURS_BANNER_BG = "#EAF6FF"
-HOURS_BANNER_BORDER = "#B8DDF7"
-HOURS_BANNER_TEXT = "#003B5C"
+if st.session_state.dark_mode and not st.session_state.high_contrast:
+    HOURS_BANNER_BG = "#0F2A3D"
+    HOURS_BANNER_BORDER = "#1D4A66"
+    HOURS_BANNER_TEXT = "#CFEBFF"
+    HOURS_BANNER_SOON_BG = "#3A2C0E"
+    HOURS_BANNER_SOON_BORDER = "#6B4F13"
+    HOURS_BANNER_SOON_TEXT = "#FFE1A8"
+else:
+    HOURS_BANNER_BG = "#EAF6FF"
+    HOURS_BANNER_BORDER = "#B8DDF7"
+    HOURS_BANNER_TEXT = "#003B5C"
+    HOURS_BANNER_SOON_BG = "#FFF6E5"
+    HOURS_BANNER_SOON_BORDER = "#F3CB80"
+    HOURS_BANNER_SOON_TEXT = "#7A4A00"
 
 BRAND_BLUE = BRAND_PRIMARY
 BRAND_BLUE_LIGHT = BRAND_ACCENT
@@ -956,6 +967,8 @@ def nawasa_logo_tag(size_px=56, css_class=""):
 _WAVE_BG_SVG = (
     "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20"
     "viewBox='0%200%201200%20200'%20preserveAspectRatio='none'%3E"
+    "%3Cpath%20d='M0,60%20C220,130%20420,10%20600,70%20C780,130%20980,10%201200,70%20L1200,200%20L0,200%20Z'%20"
+    f"fill='{BRAND_HOVER.replace('#', '%23')}'%20fill-opacity='0.045'/%3E"
     "%3Cpath%20d='M0,80%20C200,140%20400,20%20600,80%20C800,140%201000,20%201200,80%20L1200,200%20L0,200%20Z'%20"
     f"fill='{BRAND_PRIMARY.replace('#', '%23')}'%20fill-opacity='0.06'/%3E"
     "%3Cpath%20d='M0,120%20C220,60%20420,180%20620,120%20C820,60%201020,180%201200,120%20L1200,200%20L0,200%20Z'%20"
@@ -963,15 +976,33 @@ _WAVE_BG_SVG = (
     "%3C/svg%3E"
 )
 
+# Soft, blurred "ink in water" blobs — the main atmosphere layer behind the
+# whole app. Real Gaussian-blurred ellipses (not just soft-edged gradients)
+# in the brand's accent/primary/hover tones, scattered across a wide canvas
+# and stretched to cover the viewport, so the page reads like it's sitting
+# in gently diffused water light rather than on a flat color.
+_BLOBS_BG_SVG = (
+    "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20"
+    "viewBox='0%200%201600%20900'%3E"
+    "%3Cdefs%3E%3Cfilter%20id='aquaBlobBlur'%20x='-50%25'%20y='-50%25'%20width='200%25'%20height='200%25'%3E"
+    "%3CfeGaussianBlur%20stdDeviation='90'/%3E%3C/filter%3E%3C/defs%3E"
+    f"%3Cellipse%20cx='220'%20cy='160'%20rx='320'%20ry='220'%20fill='{BRAND_ACCENT.replace('#', '%23')}'%20fill-opacity='0.24'%20filter='url(%23aquaBlobBlur)'/%3E"
+    f"%3Cellipse%20cx='1400'%20cy='120'%20rx='260'%20ry='200'%20fill='{BRAND_PRIMARY.replace('#', '%23')}'%20fill-opacity='0.20'%20filter='url(%23aquaBlobBlur)'/%3E"
+    f"%3Cellipse%20cx='260'%20cy='760'%20rx='340'%20ry='240'%20fill='{BRAND_PRIMARY.replace('#', '%23')}'%20fill-opacity='0.18'%20filter='url(%23aquaBlobBlur)'/%3E"
+    f"%3Cellipse%20cx='1380'%20cy='780'%20rx='300'%20ry='220'%20fill='{BRAND_ACCENT.replace('#', '%23')}'%20fill-opacity='0.20'%20filter='url(%23aquaBlobBlur)'/%3E"
+    f"%3Cellipse%20cx='800'%20cy='450'%20rx='420'%20ry='260'%20fill='{BRAND_HOVER.replace('#', '%23')}'%20fill-opacity='0.14'%20filter='url(%23aquaBlobBlur)'/%3E"
+    "%3C/svg%3E"
+)
+
 _RIPPLE_BG_SVG = (
     "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20"
     "viewBox='0%200%20300%20300'%3E"
     "%3Ccircle%20cx='150'%20cy='150'%20r='40'%20fill='none'%20"
-    f"stroke='{BRAND_ACCENT.replace('#', '%23')}'%20stroke-opacity='0.14'%20stroke-width='2'/%3E"
+    f"stroke='{BRAND_ACCENT.replace('#', '%23')}'%20stroke-opacity='0.20'%20stroke-width='2'/%3E"
     "%3Ccircle%20cx='150'%20cy='150'%20r='80'%20fill='none'%20"
-    f"stroke='{BRAND_ACCENT.replace('#', '%23')}'%20stroke-opacity='0.10'%20stroke-width='2'/%3E"
+    f"stroke='{BRAND_ACCENT.replace('#', '%23')}'%20stroke-opacity='0.14'%20stroke-width='2'/%3E"
     "%3Ccircle%20cx='150'%20cy='150'%20r='120'%20fill='none'%20"
-    f"stroke='{BRAND_ACCENT.replace('#', '%23')}'%20stroke-opacity='0.06'%20stroke-width='2'/%3E"
+    f"stroke='{BRAND_ACCENT.replace('#', '%23')}'%20stroke-opacity='0.09'%20stroke-width='2'/%3E"
     "%3C/svg%3E"
 )
 
@@ -998,22 +1029,33 @@ _BUBBLES_BG_SVG = (
     + "%3C/svg%3E"
 )
 
-CSS_BLOCK = f"""<style>
-html, body, [class*="css"] {{
-font-family: 'Poppins', 'Inter', sans-serif;
-font-size: {BASE_FONT_SIZE};
-}}
+if st.session_state.high_contrast:
+    # High contrast mode intentionally skips all decorative texture — flat
+    # background only, to keep contrast and legibility maximized.
+    _ATMOSPHERE_CSS = f"""
+.stApp {{ background-color: {BRAND_BG}; }}
+"""
+else:
+    _ATMOSPHERE_CSS = f"""
 .stApp {{
 background-color: {BRAND_BG};
 background-image:
-radial-gradient(ellipse 900px 500px at 50% -10%, {BRAND_ACCENT}14 0%, transparent 60%),
+radial-gradient(ellipse 900px 500px at 50% -10%, {BRAND_ACCENT}22 0%, transparent 60%),
+url("{_BLOBS_BG_SVG}"),
+url("{_RIPPLE_BG_SVG}"),
 linear-gradient(180deg, {BRAND_BG_SOFT} 0%, {BRAND_BG} 45%),
 url("{_WAVE_BG_SVG}");
-background-repeat: no-repeat, no-repeat, repeat-x;
-background-position: top, top, bottom;
-background-size: 100% 100%, 100% 420px, 1200px 200px;
-background-attachment: fixed, fixed, fixed;
+background-repeat: no-repeat, no-repeat, repeat, no-repeat, repeat-x;
+background-position: top, 50% 50%, center, top, bottom;
+background-size: 100% 100%, 120% 120%, 640px 640px, 100% 420px, 1200px 200px;
+background-attachment: fixed, fixed, fixed, fixed, fixed;
+animation: aquaBlobDrift 46s ease-in-out infinite;
 position: relative;
+}}
+@keyframes aquaBlobDrift {{
+0% {{ background-position: top, 48% 47%, center, top, bottom; }}
+50% {{ background-position: top, 53% 53%, center, top, bottom; }}
+100% {{ background-position: top, 48% 47%, center, top, bottom; }}
 }}
 @keyframes aquaBubbleDrift {{
 from {{ background-position: 0px 0px; }}
@@ -1038,6 +1080,14 @@ background: radial-gradient(ellipse 1200px 700px at 50% 0%, transparent 55%, {BR
 pointer-events: none;
 z-index: -1;
 }}
+"""
+
+CSS_BLOCK = f"""<style>
+html, body, [class*="css"] {{
+font-family: 'Poppins', 'Inter', sans-serif;
+font-size: {BASE_FONT_SIZE};
+}}
+{_ATMOSPHERE_CSS}
 ::-webkit-scrollbar {{ width: 8px; height: 8px; }}
 ::-webkit-scrollbar-track {{ background: {BRAND_BG}; }}
 ::-webkit-scrollbar-thumb {{ background: {BRAND_PRIMARY}55; border-radius: 10px; }}
@@ -1176,14 +1226,85 @@ background-size: 100% 100%, 1200px 200px !important;
 .aqua-footer strong {{ color: {BRAND_PRIMARY}; font-weight: 700; }}
 .aqua-hours-banner {{ display: flex; align-items: flex-start; gap: 0.55rem; background: {HOURS_BANNER_BG}; border: 1px solid {HOURS_BANNER_BORDER}; border-radius: 14px; padding: 0.65rem 0.9rem; margin-bottom: 0.85rem; color: {HOURS_BANNER_TEXT}; font-size: 0.8rem; line-height: 1.45; animation: aquaFadeUp 0.3s ease-out; }}
 .aqua-hours-banner-icon {{ flex-shrink: 0; font-size: 0.95rem; line-height: 1.4; }}
-.aqua-hours-banner-soon {{ background: #FFF6E5; border-color: #F3CB80; color: #7A4A00; }}
+.aqua-hours-banner-soon {{ background: {HOURS_BANNER_SOON_BG}; border-color: {HOURS_BANNER_SOON_BORDER}; color: {HOURS_BANNER_SOON_TEXT}; }}
 [data-testid="stAlertContainer"] {{ border-radius: 16px !important; border: 1px solid transparent !important; box-shadow: 0 2px 12px rgba(0, 90, 156, 0.08); animation: aquaFadeUp 0.25s ease-out; }}
 [data-testid="stAlertContainer"][data-baseweb="notification"] {{ padding: 0.85rem 1rem !important; }}
 div[data-testid="stAlertContainer"]:has(svg[data-testid="stIconMaterial"]) {{ align-items: flex-start; }}
-[data-testid="stNotificationContentError"] {{ color: #7A1F1F !important; }}
-[data-testid="stNotificationContentSuccess"] {{ color: #0F5C3E !important; }}
-[data-testid="stNotificationContentWarning"] {{ color: #7A4A00 !important; }}
-[data-testid="stNotificationContentInfo"] {{ color: {BRAND_PRIMARY} !important; }}
+/* Alert boxes: card background + colored left accent (theme-aware) instead
+   of Streamlit's baked-in light pastel backgrounds, which never adapted to
+   dark mode and made alert text unreadable against a dark page. */
+[data-testid="stAlertContainer"] {{ background-color: {BRAND_CARD} !important; border-left: 4px solid transparent !important; }}
+[data-testid="stAlertContainer"]:has([data-testid="stNotificationContentError"]) {{ border-left-color: #E5484D !important; }}
+[data-testid="stAlertContainer"]:has([data-testid="stNotificationContentSuccess"]) {{ border-left-color: #30A46C !important; }}
+[data-testid="stAlertContainer"]:has([data-testid="stNotificationContentWarning"]) {{ border-left-color: #F5A623 !important; }}
+[data-testid="stAlertContainer"]:has([data-testid="stNotificationContentInfo"]) {{ border-left-color: {BRAND_ACCENT} !important; }}
+[data-testid="stNotificationContentError"],
+[data-testid="stNotificationContentSuccess"],
+[data-testid="stNotificationContentWarning"],
+[data-testid="stNotificationContentInfo"] {{ color: {BRAND_TEXT} !important; }}
+
+/* ---------------------------------------------------------------------
+   Native Streamlit widget theming — none of these ever adapted to the
+   dark_mode/high_contrast toggles before, so they stayed on Streamlit's
+   baked-in light theme (white boxes, dark-gray labels) even with a dark
+   page behind them, making everything hard to read in dark mode.
+   ------------------------------------------------------------------- */
+/* Widget labels (covers text_input, selectbox, text_area, number_input,
+   date_input, file_uploader, radio, multiselect, toggle, checkbox — they
+   all render their label through this one testid). */
+[data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] p {{ color: {BRAND_TEXT} !important; }}
+/* General body text Streamlit renders itself (captions, markdown, help
+   text, metric labels) that isn't inside one of our own .aqua-* cards. */
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] li,
+[data-testid="stCaptionContainer"],
+[data-testid="stCaptionContainer"] p,
+[data-testid="stMetricLabel"], [data-testid="stMetricValue"],
+[data-testid="stMetricDelta"] {{ color: {BRAND_TEXT} !important; }}
+/* Text/number/date input boxes and text areas. */
+[data-testid="stTextInput"] input,
+[data-testid="stTextArea"] textarea,
+[data-testid="stNumberInput"] input,
+[data-testid="stDateInput"] input,
+[data-baseweb="base-input"],
+[data-baseweb="input"] {{ background-color: {BRAND_CARD} !important; color: {BRAND_TEXT} !important; border-color: {BRAND_PRIMARY}44 !important; }}
+[data-testid="stTextInput"] input::placeholder,
+[data-testid="stTextArea"] textarea::placeholder,
+[data-testid="stNumberInput"] input::placeholder {{ color: {BRAND_TEXT}77 !important; }}
+/* Selectbox / multiselect trigger box. */
+[data-baseweb="select"] > div {{ background-color: {BRAND_CARD} !important; color: {BRAND_TEXT} !important; border-color: {BRAND_PRIMARY}44 !important; }}
+[data-baseweb="select"] svg {{ fill: {BRAND_TEXT} !important; }}
+/* Dropdown/popover menu (selectbox options, multiselect list) — this
+   renders in a portal, so it needs its own unscoped rule. */
+[data-baseweb="popover"] [data-baseweb="menu"] {{ background-color: {BRAND_CARD} !important; }}
+[data-baseweb="menu"] li {{ color: {BRAND_TEXT} !important; }}
+[data-baseweb="menu"] li:hover {{ background-color: {BRAND_BG_SOFT} !important; }}
+/* Multiselect selected-item tags/chips. */
+[data-baseweb="tag"] {{ background-color: {BRAND_PRIMARY}22 !important; color: {BRAND_TEXT} !important; }}
+[data-baseweb="tag"] span {{ color: {BRAND_TEXT} !important; }}
+/* Radio group (Customer Portal / Staff Portal switch, issue-type picker). */
+[data-testid="stRadio"] label, [data-testid="stRadio"] label p {{ color: {BRAND_TEXT} !important; }}
+/* File uploader dropzone. */
+[data-testid="stFileUploaderDropzone"] {{ background-color: {BRAND_BG_SOFT} !important; border-color: {BRAND_PRIMARY}44 !important; }}
+[data-testid="stFileUploaderDropzoneInstructions"],
+[data-testid="stFileUploaderDropzoneInstructions"] span,
+[data-testid="stFileUploaderDropzoneInstructions"] small {{ color: {BRAND_TEXT} !important; }}
+[data-testid="stFileUploaderFile"] {{ color: {BRAND_TEXT} !important; }}
+/* Expander (report form, system instruction viewer). */
+[data-testid="stExpander"] {{ background-color: {BRAND_CARD} !important; border: 1px solid {BRAND_PRIMARY}22 !important; border-radius: 14px !important; }}
+[data-testid="stExpander"] summary {{ color: {BRAND_TEXT} !important; }}
+[data-testid="stExpander"] svg {{ fill: {BRAND_TEXT} !important; }}
+/* Toggle switch track (dark mode / high contrast / voice reply toggles). */
+[data-testid="stToggle"] label div:first-child {{ background-color: {BRAND_BG_SOFT} !important; }}
+/* Plain code/text blocks (used for the "view system instruction" panel). */
+[data-testid="stText"], [data-testid="stCodeBlock"] {{ background-color: {BRAND_CARD} !important; color: {BRAND_TEXT} !important; }}
+[data-testid="stText"] {{ border: 1px solid {BRAND_PRIMARY}22 !important; border-radius: 10px !important; padding: 0.6rem 0.8rem !important; }}
+/* Progress bar track (report tracking status). */
+[data-testid="stProgress"] > div > div {{ background-color: {BRAND_BG_SOFT} !important; }}
+/* Data editor / dataframe (Staff Portal) — nudges the canvas grid toward a
+   dark rendering when dark mode is on; full native dark theming of the
+   grid isn't controllable purely via CSS. */
+[data-testid="stDataFrame"], [data-testid="stDataFrameResizable"] {{ color-scheme: {"dark" if st.session_state.dark_mode else "light"}; }}
 html, body {{ width: 100%; height: 100%; margin: 0; }}
 .stApp {{ min-height: 100vh; width: 100%; }}
 #MainMenu, footer {{ visibility: hidden; height: 0; }}
@@ -2387,4 +2508,3 @@ elif active_tab == "settings":
 st.markdown('</div>', unsafe_allow_html=True)  # aqua-page
 
 st.markdown('<div class="aqua-footer">Powered by <strong>NAWASA</strong></div>', unsafe_allow_html=True)
-
