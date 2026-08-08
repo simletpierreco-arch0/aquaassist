@@ -475,6 +475,7 @@ UI_TEXT = {
     "get_notified": "🔔 Get notified", "notify_contact_label": "Email or phone number",
     "notify_categories_label": "Notify me about", "subscribe_button": "Subscribe",
     "voice_toggle_label": "🔊 Speak replies aloud", "voice_popover_label": "🎤",
+    "camera_popover_label": "📷 Take a photo of the issue",
     "voice_help_on": "Uses text-to-speech to read the bot's replies aloud, in the warmest Caribbean-leaning voice available.",
     "voice_help_off": "Install gTTS to enable this.",
     "issue_leak": "Leak", "issue_no_water": "No water supply", "issue_low_pressure": "Low pressure",
@@ -875,7 +876,7 @@ Use the following facts to answer user questions:
 - NAWASA's official contact details: Phone (473) 440-2155, WhatsApp via {territory_whatsapp} (this is the number for {territory}), Website https://nawasa.gd/.
 - NAWASA's main office is now located on Lucas Street, St. George's (it moved from its former, over 150-year-old building on the Carenage). Sub-offices are located at Seaton James Street, Grenville; Lower Depradine Street, Gouyave; and additional sub-offices in Sauteurs, St. David's, and Grand Anse.
 - When a customer describes a specific problem and gives at least a location, log it immediately using the log_water_report tool — do not tell the customer to fill out a separate form themselves.
-- When a customer reports a visible physical issue (a leak, burst main, damaged hydrant, water quality concern, etc.), ask them to attach a photo of it using the 📎 attachment option in the chat box, since it helps our technicians assess severity and prepare before visiting. Ask for this naturally as part of your reply — don't make it a precondition for logging the report, and don't ask for a photo for issues that wouldn't have one (e.g. billing questions or no water supply with nothing to see).
+- When a customer reports a visible physical issue (a leak, burst main, damaged hydrant, water quality concern, etc.), ask them to send a photo of it — they can upload an existing one via the "+" icon in the chat box, or tap the 📷 camera button next to the message box to take one on the spot. This helps our technicians assess severity and prepare before visiting. Ask for this naturally as part of your reply — don't make it a precondition for logging the report, and don't ask for a photo for issues that wouldn't have one (e.g. billing questions or no water supply with nothing to see).
 - If the customer attaches a photo or video of the issue, look at it before calling log_water_report and set severity based on what you actually see.
 - Use natural understanding, not keyword matching.
 
@@ -1848,12 +1849,16 @@ if active_tab == "chat":
         with st.chat_message("assistant", avatar=ASSISTANT_AVATAR):
             st.markdown(t("welcome"))
 
-    input_row = st.columns([0.09, 0.08, 0.83])
+    input_row = st.columns([0.09, 0.09, 0.08, 0.74])
     with input_row[0]:
         st.markdown('<div class="aqua-mic-btn">', unsafe_allow_html=True)
         mic_clicked = st.button("🎤", key="mic_toggle_btn", help=t("voice_popover_label"))
         st.markdown('</div>', unsafe_allow_html=True)
     with input_row[1]:
+        st.markdown('<div class="aqua-mic-btn">', unsafe_allow_html=True)
+        camera_clicked = st.button("📷", key="camera_toggle_btn", help=t("camera_popover_label"))
+        st.markdown('</div>', unsafe_allow_html=True)
+    with input_row[2]:
         st.session_state.voice_replies = st.toggle(
             "🔊", value=st.session_state.voice_replies, disabled=not HAS_TTS,
             help=t("voice_help_on") if HAS_TTS else t("voice_help_off"), label_visibility="visible",
@@ -1877,6 +1882,25 @@ if active_tab == "chat":
                 if uploaded_audio and st.button("Send this voice note", key="send_upload_btn"):
                     voice_text_input = ("__AUDIO__", uploaded_audio.read(), uploaded_audio.type or "audio/mpeg")
                     st.session_state["_mic_open"] = False
+
+    # Camera capture — a customer can take a photo of the issue on the spot
+    # (rather than only uploading an existing one via the chat input's "+"
+    # attach button). st.camera_input opens the device camera directly on
+    # mobile browsers. Shown in its own toggled panel, mirroring the mic
+    # recorder above, with an explicit "Send photo" step so the customer can
+    # preview/retake before it's sent.
+    camera_photo_input = None
+    if camera_clicked:
+        st.session_state["_camera_open"] = not st.session_state.get("_camera_open", False)
+    if st.session_state.get("_camera_open"):
+        with st.container(border=True):
+            captured_photo = st.camera_input(
+                "Take a photo of the issue", key="camera_capture_input", label_visibility="collapsed",
+            )
+            if captured_photo is not None:
+                if st.button("Send photo", key="send_camera_photo_btn"):
+                    camera_photo_input = ("__PHOTO__", captured_photo.getvalue(), captured_photo.type or "image/jpeg")
+                    st.session_state["_camera_open"] = False
 
     try:
         chat_submission = st.chat_input(
@@ -1902,9 +1926,13 @@ if active_tab == "chat":
 
     user_turn = None
     is_audio_turn = False
+    is_photo_turn = False
     if voice_text_input:
         user_turn = voice_text_input
         is_audio_turn = True
+    elif camera_photo_input:
+        user_turn = camera_photo_input
+        is_photo_turn = True
     elif queued_prompt:
         user_turn = queued_prompt
     elif typed_input:
@@ -1929,6 +1957,42 @@ if active_tab == "chat":
                         reply_text = bot_response.text
                     except Exception as e:
                         reply_text = f"⚠️ Error processing voice message: {e}"
+
+            reply_audio = None
+            if st.session_state.voice_replies:
+                reply_audio = speak_text(reply_text, "en")
+
+            st.session_state.messages.append({"role": "assistant", "content": reply_text, "audio": reply_audio})
+            st.rerun()
+        elif is_photo_turn:
+            _, photo_bytes, photo_mime_type = user_turn
+            ensure_files()
+            attachment_name = f"{uuid.uuid4().hex[:8]}_camera_photo.jpg"
+            with open(os.path.join(ATTACHMENTS_DIR, attachment_name), "wb") as out:
+                out.write(photo_bytes)
+
+            st.session_state.messages.append({
+                "role": "user", "content": "📷 Sent a photo",
+                "attachment_name": attachment_name,
+            })
+
+            allowed, limit_reason = check_and_record_usage()
+            if not allowed:
+                reply_text = usage_limit_message(limit_reason)
+            else:
+                with st.spinner("Thinking..."):
+                    try:
+                        photo_part = types.Part.from_bytes(data=photo_bytes, mime_type=photo_mime_type)
+                        bot_response = st.session_state.chat.send_message([
+                            photo_part,
+                            "The customer just took and sent a photo of a NAWASA water service "
+                            "issue (e.g. a leak, burst pipe, or damaged hydrant) using their camera. "
+                            "Look at what's visible and respond helpfully — ask for the location and "
+                            "any other missing details if you don't already have them.",
+                        ])
+                        reply_text = bot_response.text
+                    except Exception as e:
+                        reply_text = f"⚠️ Error: {e}"
 
             reply_audio = None
             if st.session_state.voice_replies:
