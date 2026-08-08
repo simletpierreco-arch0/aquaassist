@@ -10,7 +10,10 @@ Run with:
 Folder layout expected:
     app.py
     assets/aquaassist_logo.png
-    assets/aquaassist_avatar.png (chat-bubble avatar only — see AVATAR_PATH)
+    assets/aquaassist_avatar.png (chat-bubble avatar — a blue/aqua water-drop
+                                   AI assistant with a thin dashed "orbit"
+                                   ring, generated to match the app's theme;
+                                   see AVATAR_PATH)
     assets/nawasa_logo.png    (the official NAWASA authority logo, shown on
                                 the login screen, header, and dashboard.)
     .streamlit/config.toml
@@ -56,6 +59,16 @@ time, the status pill, sidebar caption, and Chat tab both switch to an
 amber "closing soon" state with a live countdown so customers know to call
 or WhatsApp before staff go home for the day — see get_business_hours_status()
 and the "closing_soon" / "minutes_until_close" fields it returns.
+
+VISUAL DESIGN NOTE: the background is a layered, low-opacity water motif
+(soft gradient + a bottom wave band + a very faint drifting bubble field —
+see _WAVE_BG_SVG / _BUBBLES_BG_SVG / the .stApp CSS rules) rather than a
+photographic ocean image, so it stays out of the way of the existing
+content at any screen size. The chat avatar (assets/aquaassist_avatar.png)
+carries the same accent color and a thin dashed "AI orbit" ring, which the
+CSS echoes as a soft glow behind the hero logo and message avatars — this
+recurring ring motif is the app's one signature visual detail; everything
+else stays quiet and card-based on purpose.
 """
 
 import os
@@ -948,11 +961,14 @@ font-size: {BASE_FONT_SIZE};
 }}
 .stApp {{
 background-color: {BRAND_BG};
-background-image: linear-gradient(180deg, {BRAND_BG_SOFT} 0%, {BRAND_BG} 45%), url("{_WAVE_BG_SVG}");
-background-repeat: no-repeat, repeat-x;
-background-position: top, bottom;
-background-size: 100% 420px, 1200px 200px;
-background-attachment: fixed, fixed;
+background-image:
+radial-gradient(ellipse 900px 500px at 50% -10%, {BRAND_ACCENT}14 0%, transparent 60%),
+linear-gradient(180deg, {BRAND_BG_SOFT} 0%, {BRAND_BG} 45%),
+url("{_WAVE_BG_SVG}");
+background-repeat: no-repeat, no-repeat, repeat-x;
+background-position: top, top, bottom;
+background-size: 100% 100%, 100% 420px, 1200px 200px;
+background-attachment: fixed, fixed, fixed;
 position: relative;
 }}
 @keyframes aquaBubbleDrift {{
@@ -970,6 +986,14 @@ animation: aquaBubbleDrift 70s linear infinite;
 pointer-events: none;
 z-index: -1;
 }}
+.stApp::after {{
+content: "";
+position: fixed;
+inset: 0;
+background: radial-gradient(ellipse 1200px 700px at 50% 0%, transparent 55%, {BRAND_BG}55 100%);
+pointer-events: none;
+z-index: -1;
+}}
 ::-webkit-scrollbar {{ width: 8px; height: 8px; }}
 ::-webkit-scrollbar-track {{ background: {BRAND_BG}; }}
 ::-webkit-scrollbar-thumb {{ background: {BRAND_PRIMARY}55; border-radius: 10px; }}
@@ -978,6 +1002,7 @@ z-index: -1;
 @keyframes aquaPulseRing {{ 0% {{ box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.55); }} 70% {{ box-shadow: 0 0 0 14px rgba(37, 211, 102, 0); }} 100% {{ box-shadow: 0 0 0 0 rgba(37, 211, 102, 0); }} }}
 @keyframes aquaPop {{ 0% {{ opacity: 0; transform: scale(0.92) translateY(8px); }} 60% {{ opacity: 1; transform: scale(1.01) translateY(0); }} 100% {{ opacity: 1; transform: scale(1) translateY(0); }} }}
 @keyframes aquaDotBounce {{ 0%, 80%, 100% {{ transform: translateY(0); opacity: 0.5; }} 40% {{ transform: translateY(-5px); opacity: 1; }} }}
+@keyframes aquaOrbitGlow {{ 0%, 100% {{ opacity: 0.55; }} 50% {{ opacity: 0.95; }} }}
 * {{ scroll-behavior: smooth; }}
 .aqua-page {{ animation: aquaFadeUp 0.35s ease-out; }}
 .aqua-hero {{
@@ -1001,7 +1026,14 @@ background-size: 18px 18px; opacity: 0.5; z-index: 1; pointer-events: none;
 }}
 .aqua-hero-content {{ display: flex; align-items: center; justify-content: space-between; gap: 1rem; position: relative; z-index: 2; animation: aquaFadeUp 0.5s ease-out; }}
 .aqua-hero-brand {{ display: flex; align-items: center; gap: 0.85rem; min-width: 0; }}
-.aqua-hero img {{ width: 60px; height: 60px; border-radius: 50%; background: #FFFFFF; padding: 5px; box-shadow: 0 4px 14px rgba(0,0,0,0.22); flex-shrink: 0; }}
+.aqua-hero-brand {{ position: relative; }}
+.aqua-hero-brand::before {{
+content: ""; position: absolute; left: -6px; top: 50%; transform: translateY(-50%);
+width: 72px; height: 72px; border-radius: 50%;
+background: radial-gradient({BRAND_ACCENT}55 0%, transparent 70%);
+animation: aquaOrbitGlow 3.4s ease-in-out infinite; pointer-events: none; z-index: 0;
+}}
+.aqua-hero img {{ width: 60px; height: 60px; border-radius: 50%; background: #FFFFFF; padding: 5px; box-shadow: 0 4px 14px rgba(0,0,0,0.22); flex-shrink: 0; position: relative; z-index: 1; }}
 .aqua-hero-nawasa-badge {{ width: 52px; height: 52px; border-radius: 50%; background: #FFFFFF; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0,0,0,0.22); flex-shrink: 0; overflow: hidden; padding: 4px; box-sizing: border-box; }}
 .aqua-hero-nawasa-badge img {{ width: 100%; height: 100%; object-fit: contain; }}
 .aqua-hero-title {{ font-size: 1.7rem; font-weight: 800; color: #FFFFFF; line-height: 1.15; letter-spacing: -0.02em; }}
@@ -1027,6 +1059,7 @@ background-size: 18px 18px; opacity: 0.5; z-index: 1; pointer-events: none;
 .aqua-faq-cat {{ font-size: 0.68rem; font-weight: 700; color: {BRAND_ACCENT}; text-transform: uppercase; letter-spacing: 0.05em; }}
 [data-testid="stChatMessage"] {{ border-radius: 18px; padding: 0.75rem 1rem; margin-bottom: 0.75rem; box-shadow: 0 2px 10px rgba(0, 90, 156, 0.07); animation: aquaFadeUp 0.3s ease-out; border: 1px solid transparent; gap: 0.65rem; transition: box-shadow 0.15s ease-in-out; }}
 [data-testid="stChatMessage"] [data-testid="stChatMessageAvatarAssistant"], [data-testid="stChatMessage"] [data-testid="stChatMessageAvatarUser"] {{ box-shadow: 0 0 0 2px {BRAND_CARD}, 0 0 0 3px {BRAND_PRIMARY}30; }}
+[data-testid="stChatMessage"] [data-testid="stChatMessageAvatarAssistant"] {{ box-shadow: 0 0 0 2px {BRAND_CARD}, 0 0 0 3px {BRAND_ACCENT}55, 0 0 12px {BRAND_ACCENT}40; }}
 [data-testid="stChatMessage"]:has(img[alt="assistant avatar"]), [data-testid="stChatMessageAvatarAssistant"] ~ div, div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {{ background: {BRAND_CARD}; border: 1px solid {ASSISTANT_BUBBLE_BORDER}; border-radius: 6px 18px 18px 18px; color: {ASSISTANT_BUBBLE_TEXT}; }}
 [data-testid="stChatMessage"]:has(img[alt="assistant avatar"]) p, div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) p {{ color: {ASSISTANT_BUBBLE_TEXT}; }}
 div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {{ background: {USER_BUBBLE_BG}; border: 1px solid {USER_BUBBLE_BG}; border-radius: 18px 6px 18px 18px; flex-direction: row-reverse; text-align: right; }}
@@ -1100,6 +1133,13 @@ background-size: 100% 100%, 1200px 200px !important;
 .aqua-hours-banner {{ display: flex; align-items: flex-start; gap: 0.55rem; background: {HOURS_BANNER_BG}; border: 1px solid {HOURS_BANNER_BORDER}; border-radius: 14px; padding: 0.65rem 0.9rem; margin-bottom: 0.85rem; color: {HOURS_BANNER_TEXT}; font-size: 0.8rem; line-height: 1.45; animation: aquaFadeUp 0.3s ease-out; }}
 .aqua-hours-banner-icon {{ flex-shrink: 0; font-size: 0.95rem; line-height: 1.4; }}
 .aqua-hours-banner-soon {{ background: #FFF6E5; border-color: #F3CB80; color: #7A4A00; }}
+[data-testid="stAlertContainer"] {{ border-radius: 16px !important; border: 1px solid transparent !important; box-shadow: 0 2px 12px rgba(0, 90, 156, 0.08); animation: aquaFadeUp 0.25s ease-out; }}
+[data-testid="stAlertContainer"][data-baseweb="notification"] {{ padding: 0.85rem 1rem !important; }}
+div[data-testid="stAlertContainer"]:has(svg[data-testid="stIconMaterial"]) {{ align-items: flex-start; }}
+[data-testid="stNotificationContentError"] {{ color: #7A1F1F !important; }}
+[data-testid="stNotificationContentSuccess"] {{ color: #0F5C3E !important; }}
+[data-testid="stNotificationContentWarning"] {{ color: #7A4A00 !important; }}
+[data-testid="stNotificationContentInfo"] {{ color: {BRAND_PRIMARY} !important; }}
 html, body {{ width: 100%; height: 100%; margin: 0; }}
 .stApp {{ min-height: 100vh; width: 100%; }}
 #MainMenu, header[data-testid="stHeader"], footer {{ visibility: hidden; height: 0; }}
