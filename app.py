@@ -268,10 +268,11 @@ USAGE_PATH = os.path.join("data", "usage.csv")
 
 # ---------------------------------------------------------------------------
 # Business hours — NAWASA Customer Service.
-# Monday–Saturday, 8:00 AM–4:00 PM, Grenada local time. Only Sunday is
-# always closed. NAWASA_HOLIDAYS lists official closure dates (YYYY-MM-DD)
-# that are also treated as closed even if they fall on a business day —
-# add/edit this list each year as NAWASA publishes its holiday schedule.
+# Monday–Friday, 8:00 AM–4:00 PM, Grenada local time. Saturday and Sunday
+# are always closed (weekends). NAWASA_HOLIDAYS lists official closure
+# dates (YYYY-MM-DD) that are also treated as closed even if they fall on
+# a business day — add/edit this list each year as NAWASA publishes its
+# holiday schedule.
 #
 # CLOSING_SOON_WINDOW_MINUTES controls how far ahead of closing time the
 # "closing soon" countdown UI (amber status pill, sidebar caption, and
@@ -302,22 +303,22 @@ def get_business_hours_status():
     now = datetime.now(GRENADA_TZ)
     today_str = now.strftime("%Y-%m-%d")
     weekday_idx = now.weekday()  # Monday=0 ... Sunday=6
-    is_weekend = weekday_idx == 6  # Sunday only — Saturday is a business day
+    is_weekend = weekday_idx >= 5  # Saturday(5) and Sunday(6) — NAWASA is closed weekends
     is_holiday = today_str in NAWASA_HOLIDAYS
     is_open_hour = BUSINESS_HOURS_START <= now.hour < BUSINESS_HOURS_END
 
     is_open = (not is_weekend) and (not is_holiday) and is_open_hour
 
-    # Figure out the next business day (skipping Sundays/holidays) for the
+    # Figure out the next business day (skipping Sat/Sun/holidays) for the
     # "reopens" message shown when closed.
     next_day = now
     if is_weekend or is_holiday or now.hour >= BUSINESS_HOURS_END:
         next_day = next_day + timedelta(days=1)
-    while next_day.weekday() == 6 or next_day.strftime("%Y-%m-%d") in NAWASA_HOLIDAYS:
+    while next_day.weekday() >= 5 or next_day.strftime("%Y-%m-%d") in NAWASA_HOLIDAYS:
         next_day = next_day + timedelta(days=1)
 
     if is_weekend:
-        closed_reason = "It's Sunday"
+        closed_reason = "It's the weekend"
     elif is_holiday:
         closed_reason = "Today is a NAWASA holiday"
     elif now.hour < BUSINESS_HOURS_START:
@@ -407,6 +408,32 @@ GRENADA_PARISHES = [
 ]
 GRENADA_CENTER = (12.1165, -61.6790)
 
+# Approximate parish center coordinates, used only to auto-suggest the
+# nearest parish when a customer pins a location on the map or uses GPS —
+# this is a closest-center heuristic, not an official boundary lookup, but
+# it's accurate enough to save the customer from picking the parish by hand.
+PARISH_CENTERS = {
+    "St. George's (Capital area)": (12.0561, -61.7488),
+    "St. Andrew's": (12.1500, -61.6500),
+    "St. David's": (12.0333, -61.6500),
+    "St. John's": (12.1667, -61.7167),
+    "St. Mark's": (12.2167, -61.6833),
+    "St. Patrick's": (12.2333, -61.6167),
+    "Carriacou and Petite Martinique": (12.4747, -61.4487),
+}
+
+def _nearest_parish(lat, lng):
+    """Returns the GRENADA_PARISHES entry whose approximate center is
+    closest (straight-line distance) to the given coordinates. Grenada is
+    small enough that this simple heuristic is good enough to auto-fill
+    the Parish dropdown when a customer pins a spot on the map."""
+    best_parish, best_dist = None, None
+    for parish, (p_lat, p_lng) in PARISH_CENTERS.items():
+        dist = (lat - p_lat) ** 2 + (lng - p_lng) ** 2
+        if best_dist is None or dist < best_dist:
+            best_parish, best_dist = parish, dist
+    return best_parish
+
 UI_TEXT = {
     "welcome": (
         "👋 **Welcome to AquaAssist**\n\n"
@@ -465,7 +492,7 @@ UI_TEXT = {
     "map_gps_button": "📡 Use My GPS Location",
     "map_not_installed": "Interactive map isn't installed on this server — add `folium` and `streamlit-folium` to requirements.txt to enable it. Enter your parish and address manually for now.",
     "map_pinned_caption": "Pinned location",
-    "map_click_hint": "Click or drag the pin to set the exact spot.",
+    "map_click_hint": "Click anywhere on the map to set the pin — the nearest parish fills in automatically.",
     "severity_label": "Severity",
     "severity_analyze_button": "Analyze severity from photo",
     "outage_banner_prefix": "⚠️ Service notice for",
@@ -905,6 +932,14 @@ if os.path.exists(LOGO_PATH):
     with open(LOGO_PATH, "rb") as f:
         logo_b64 = base64.b64encode(f.read()).decode()
 
+# Fallback image for the hero header brand mark when aquaassist_logo.png
+# isn't present — uses the chat avatar image instead of the plain water
+# droplet emoji.
+avatar_b64 = ""
+if os.path.exists(AVATAR_PATH):
+    with open(AVATAR_PATH, "rb") as f:
+        avatar_b64 = base64.b64encode(f.read()).decode()
+
 nawasa_logo_b64 = ""
 if logo_path.exists():
     with open(logo_path, "rb") as f:
@@ -1274,11 +1309,11 @@ with st.sidebar:
     st.caption(f"📍 Territory: {st.session_state.territory}")
     _sidebar_hours = get_business_hours_status()
     if _sidebar_hours["is_open"] and _sidebar_hours["closing_soon"]:
-        st.caption(f"🟡 Office Open — closing in {_sidebar_hours['minutes_until_close']} min · Mon–Sat, 8:00 AM – 4:00 PM")
+        st.caption(f"🟡 Office Open — closing in {_sidebar_hours['minutes_until_close']} min · Mon–Fri, 8:00 AM – 4:00 PM")
     elif _sidebar_hours["is_open"]:
-        st.caption("🟢 Office Open · Mon–Sat, 8:00 AM – 4:00 PM")
+        st.caption("🟢 Office Open · Mon–Fri, 8:00 AM – 4:00 PM")
     else:
-        st.caption(f"🟠 Offices Closed — reopens {_sidebar_hours['reopens_label']} · Mon–Sat, 8:00 AM – 4:00 PM")
+        st.caption(f"🟠 Offices Closed — reopens {_sidebar_hours['reopens_label']} · Mon–Fri, 8:00 AM – 4:00 PM")
 
     with st.expander("⚙️ Territory & API key"):
         st.selectbox(
@@ -1621,7 +1656,12 @@ def _build_composed_location():
     loc += f" (GPS: {pin['lat']:.5f}, {pin['lng']:.5f})"
     return loc
 
-logo_html = f'<img src="data:image/png;base64,{logo_b64}" />' if logo_b64 else "💧"
+if logo_b64:
+    logo_html = f'<img src="data:image/png;base64,{logo_b64}" />'
+elif avatar_b64:
+    logo_html = f'<img src="data:image/png;base64,{avatar_b64}" />'
+else:
+    logo_html = "💧"
 
 if not api_key:
     st.info("👈 Enter your Google AI Studio API key in the sidebar (Territory & API key) to start chatting.")
@@ -1727,7 +1767,7 @@ chat_hero = f"""<div class="aqua-hero">
 {logo_html}
 <div>
 <div class="aqua-hero-title">AquaAssist</div>
-<div class="aqua-hero-subtitle">Official Virtual Assistant</div>
+<div class="aqua-hero-subtitle">NAWASA Official Virtual Assistant</div>
 {status_pill_html}
 <div class="aqua-demo-tag aqua-hero-demo-tag">Demo - Developed by Sub Pod-1</div>
 </div>
@@ -1792,7 +1832,7 @@ if active_tab == "chat":
     # wasn't present. Now falls back to the file name string itself, per
     # request.
     ASSISTANT_AVATAR = AVATAR_PATH if os.path.exists(AVATAR_PATH) else "aquaassist_avatar.png"
-    USER_AVATAR = AVATAR_PATH if os.path.exists(AVATAR_PATH) else "user_avatar.png.jpg"
+    USER_AVATAR = "🧑"
 
     for msg in st.session_state.messages:
         avatar = ASSISTANT_AVATAR if msg["role"] == "assistant" else USER_AVATAR
@@ -2040,6 +2080,12 @@ elif active_tab == "report":
                 if new_pin != st.session_state.get("_last_gps_pin"):
                     st.session_state.report_pin = new_pin
                     st.session_state["_last_gps_pin"] = new_pin
+                    # Auto-fill the Parish dropdown from the nearest parish
+                    # center, and set the widget's own session-state key too
+                    # so the selectbox picks it up on the next render.
+                    _detected_parish = _nearest_parish(new_pin["lat"], new_pin["lng"])
+                    st.session_state.report_parish = _detected_parish
+                    st.session_state["report_parish_select"] = _detected_parish
                     # Push the new coordinates straight into the report form's
                     # Location field so the customer sees it update immediately,
                     # without needing to touch that field themselves.
@@ -2068,7 +2114,7 @@ elif active_tab == "report":
         )
         folium.Marker(
             [st.session_state.report_pin["lat"], st.session_state.report_pin["lng"]],
-            draggable=True,
+            draggable=False,
             tooltip=t("map_click_hint"),
         ).add_to(m)
         map_result = st_folium(m, height=340, use_container_width=True, key="grenada_pin_map")
@@ -2079,6 +2125,12 @@ elif active_tab == "report":
                 round(st.session_state.report_pin["lat"], 6), round(st.session_state.report_pin["lng"], 6)
             ):
                 st.session_state.report_pin = {"lat": new_lat, "lng": new_lng}
+                # Auto-fill the Parish dropdown from the nearest parish
+                # center, and set the widget's own session-state key too
+                # so the selectbox picks it up on the next render.
+                _detected_parish = _nearest_parish(new_lat, new_lng)
+                st.session_state.report_parish = _detected_parish
+                st.session_state["report_parish_select"] = _detected_parish
                 _new_loc = _build_composed_location()
                 st.session_state["report_location_field"] = _new_loc
                 st.session_state["_last_composed_location"] = _new_loc
