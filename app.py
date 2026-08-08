@@ -1727,7 +1727,7 @@ chat_hero = f"""<div class="aqua-hero">
 {logo_html}
 <div>
 <div class="aqua-hero-title">AquaAssist</div>
-<div class="aqua-hero-subtitle">Nawasa Official Virtual Assistant</div>
+<div class="aqua-hero-subtitle">Official Virtual Assistant</div>
 {status_pill_html}
 <div class="aqua-demo-tag aqua-hero-demo-tag">Demo - Developed by Sub Pod-1</div>
 </div>
