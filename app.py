@@ -244,8 +244,8 @@ def retrieve_nawasa_knowledge(query_text, top_k=4):
 LOGO_PATH = os.path.join("assets", "aquaassist_logo.png")
 # Chat-bubble-only avatar. Kept separate from LOGO_PATH so the header, page
 # icon, and sidebar can keep the main AquaAssist logo while only the chat
-# message avatars use this image. Falls back to the 💧 emoji if the file
-# isn't present at this path yet.
+# message avatars use this image. Falls back to the aquaassist_avatar.png
+# filename if the file isn't present at this path yet.
 AVATAR_PATH = os.path.join("assets", "aquaassist_avatar.png")
 # Official NAWASA authority logo — shown on the login screen, chatbot
 # header, and welcome dashboard. Resolved relative to this file's own
@@ -1788,7 +1788,10 @@ if active_tab == "chat":
         )
     st.markdown(contact_row_html, unsafe_allow_html=True)
 
-    ASSISTANT_AVATAR = AVATAR_PATH if os.path.exists(AVATAR_PATH) else "💧"
+    # NOTE: previously fell back to the 💧 emoji when the avatar image file
+    # wasn't present. Now falls back to the file name string itself, per
+    # request.
+    ASSISTANT_AVATAR = AVATAR_PATH if os.path.exists(AVATAR_PATH) else "aquaassist_avatar.png"
     USER_AVATAR = "🧑"
 
     for msg in st.session_state.messages:
