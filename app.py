@@ -1792,7 +1792,7 @@ if active_tab == "chat":
     # wasn't present. Now falls back to the file name string itself, per
     # request.
     ASSISTANT_AVATAR = AVATAR_PATH if os.path.exists(AVATAR_PATH) else "aquaassist_avatar.png"
-    USER_AVATAR = "🧑"
+    USER_AVATAR = AVATAR_PATH if os.path.exists(AVATAR_PATH) else "user_avatar.png.jpg"
 
     for msg in st.session_state.messages:
         avatar = ASSISTANT_AVATAR if msg["role"] == "assistant" else USER_AVATAR
