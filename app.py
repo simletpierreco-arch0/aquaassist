@@ -77,7 +77,6 @@ import io
 import uuid
 import base64
 import smtplib
-import urllib.parse
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -941,42 +940,6 @@ BRAND_WHITE = BRAND_CARD
 WHATSAPP_GREEN = "#25D366"
 BASE_FONT_SIZE = "1.15rem" if st.session_state.large_text else "0.95rem"
 
-# ---------------------------------------------------------------------------
-# "AI-in-water" signature accent — a bioluminescent teal used sparingly
-# (one background ribbon, the light-ray glow, the calm-zone glow) as the
-# one place the background gets to feel futuristic/technological rather
-# than purely aquatic. Fixed rather than theme-branched: it's a decorative
-# glow layer, not UI chrome, and reads correctly at low opacity on both
-# the light and dark base.
-# ---------------------------------------------------------------------------
-AQUA_GLOW = "#2FF3D6"
-
-# ---------------------------------------------------------------------------
-# Glassmorphism tokens — used selectively (cards, chat bubbles, sidebar,
-# contact pills) so the interface reads as "floating above water" rather
-# than sitting on a flat opaque panel. High-contrast mode opts out
-# entirely (flat, fully opaque, maximum legibility); dark mode gets a
-# translucent dark-teal glass instead of translucent white.
-# ---------------------------------------------------------------------------
-if st.session_state.high_contrast:
-    GLASS_BG = BRAND_CARD
-    GLASS_BORDER = f"{BRAND_PRIMARY}22"
-    GLASS_BLUR = "none"
-elif st.session_state.dark_mode:
-    GLASS_BG = "rgba(18, 32, 46, 0.60)"
-    GLASS_BORDER = "rgba(255,255,255,0.12)"
-    GLASS_BLUR = "blur(18px) saturate(150%)"
-else:
-    GLASS_BG = "rgba(255, 255, 255, 0.60)"
-    GLASS_BORDER = "rgba(255,255,255,0.65)"
-    GLASS_BLUR = "blur(18px) saturate(150%)"
-
-def _svg_data_uri(svg_markup):
-    """Percent-encodes raw SVG markup into a CSS-safe data URI. Used for
-    every background layer below instead of hand-escaping — much less
-    error-prone than manual %XX substitution for anything non-trivial."""
-    return "data:image/svg+xml," + urllib.parse.quote(svg_markup, safe="")
-
 logo_b64 = ""
 if os.path.exists(LOGO_PATH):
     with open(LOGO_PATH, "rb") as f:
@@ -1054,64 +1017,6 @@ _BUBBLES_BG_SVG = (
     + "%3C/svg%3E"
 )
 
-# ---------------------------------------------------------------------------
-# Layer 2 — large flowing liquid ribbons. Three big, softly-blurred bezier
-# "ribbon" shapes (not a repeating sine wave) sweeping across the full
-# viewport, gradient-filled from deep ocean blue through cyan into the
-# AQUA_GLOW teal. This is the layer that reads as "flowing current" /
-# "underwater movement" rather than a flat tint.
-# ---------------------------------------------------------------------------
-_FLOW_BG_SVG = _svg_data_uri(f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900">
-<defs>
-<linearGradient id="flowA" x1="0" y1="0" x2="1" y2="1">
-<stop offset="0%" stop-color="{BRAND_PRIMARY}" stop-opacity="0.20"/>
-<stop offset="100%" stop-color="{AQUA_GLOW}" stop-opacity="0.05"/>
-</linearGradient>
-<linearGradient id="flowB" x1="1" y1="0.1" x2="0" y2="0.9">
-<stop offset="0%" stop-color="{BRAND_ACCENT}" stop-opacity="0.18"/>
-<stop offset="100%" stop-color="{BRAND_PRIMARY}" stop-opacity="0.04"/>
-</linearGradient>
-<filter id="flowBlur" x="-40%" y="-40%" width="180%" height="180%">
-<feGaussianBlur stdDeviation="46"/>
-</filter>
-</defs>
-<path d="M-200,190 C160,50 420,340 760,210 C1100,80 1360,310 1800,170 L1800,-120 L-200,-120 Z" fill="url(#flowA)" filter="url(#flowBlur)"/>
-<path d="M-200,660 C210,800 520,510 860,670 C1200,830 1470,560 1800,710 L1800,1020 L-200,1020 Z" fill="url(#flowB)" filter="url(#flowBlur)"/>
-<path d="M-200,430 C260,320 560,530 900,410 C1250,290 1520,470 1800,390 L1800,540 C1520,620 1250,440 900,560 C560,680 260,470 -200,580 Z" fill="{AQUA_GLOW}" fill-opacity="0.07" filter="url(#flowBlur)"/>
-</svg>""")
-
-# ---------------------------------------------------------------------------
-# Layer 5 — extremely subtle underwater-style light rays, fanning down
-# from the top of the viewport like sunlight refracting through water.
-# ---------------------------------------------------------------------------
-_RAYS_BG_SVG = _svg_data_uri("""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900">
-<defs>
-<linearGradient id="ray" x1="0" y1="0" x2="0" y2="1">
-<stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.16"/>
-<stop offset="55%" stop-color="#FFFFFF" stop-opacity="0.04"/>
-<stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
-</linearGradient>
-</defs>
-<g>
-<polygon points="150,0 320,0 90,900 -90,900" fill="url(#ray)"/>
-<polygon points="540,0 660,0 460,900 320,900" fill="url(#ray)"/>
-<polygon points="1010,0 1150,0 880,900 720,900" fill="url(#ray)"/>
-<polygon points="1400,0 1540,0 1260,900 1100,900" fill="url(#ray)"/>
-</g>
-</svg>""")
-
-# ---------------------------------------------------------------------------
-# Layer 6 — barely-visible fine water-texture grain, so the base gradient
-# doesn't read as a flat, dead CSS blend. Small tile, low alpha.
-# ---------------------------------------------------------------------------
-_NOISE_BG_SVG = _svg_data_uri("""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220">
-<filter id="grain">
-<feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" result="n"/>
-<feColorMatrix in="n" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.05 0"/>
-</filter>
-<rect width="220" height="220" filter="url(#grain)"/>
-</svg>""")
-
 if st.session_state.high_contrast:
     # High contrast mode intentionally skips all decorative texture — flat
     # background only, to keep contrast and legibility maximized.
@@ -1119,46 +1024,30 @@ if st.session_state.high_contrast:
 .stApp {{ background-color: {BRAND_BG}; }}
 """
 else:
-    # Seven stacked layers, front-to-back as listed: fine grain texture,
-    # light rays, a soft accent glow behind the hero, the large flowing
-    # liquid ribbons (Layer 2), the blurred glass-distortion blobs
-    # (Layer 3), the vertical base gradient (Layer 1), and a slow-moving
-    # wave band along the bottom edge. Only the ribbons and blobs actually
-    # drift (via aquaBlobDrift, one animation covering every layer's
-    # background-position so they don't fight each other) — the grain,
-    # rays and base stay static, matching the "extremely subtle" brief for
-    # those layers instead of adding movement that would compete with the
-    # UI on top of it.
     _ATMOSPHERE_CSS = f"""
 .stApp {{
 background-color: {BRAND_BG};
 background-image:
-url("{_NOISE_BG_SVG}"),
-url("{_RAYS_BG_SVG}"),
-radial-gradient(ellipse 900px 520px at 50% -8%, {BRAND_ACCENT}22 0%, transparent 60%),
-url("{_FLOW_BG_SVG}"),
+radial-gradient(ellipse 900px 500px at 50% -10%, {BRAND_ACCENT}22 0%, transparent 60%),
 url("{_BLOBS_BG_SVG}"),
-linear-gradient(165deg, {BRAND_BG_SOFT} 0%, {BRAND_BG} 40%, {BRAND_BG_SOFT} 100%),
+linear-gradient(180deg, {BRAND_BG_SOFT} 0%, {BRAND_BG} 45%),
 url("{_WAVE_BG_SVG}");
-background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, repeat-x;
-background-position: 0 0, top, top, 50% 48%, 48% 47%, top, bottom;
-background-size: 220px 220px, 100% 100%, 100% 100%, 130% 130%, 120% 120%, 100% 100%, 1200px 200px;
-background-attachment: fixed, fixed, fixed, fixed, fixed, fixed, fixed;
-animation: aquaBlobDrift 52s ease-in-out infinite;
+background-repeat: no-repeat, no-repeat, no-repeat, repeat-x;
+background-position: top, 50% 50%, top, bottom;
+background-size: 100% 100%, 120% 120%, 100% 420px, 1200px 200px;
+background-attachment: fixed, fixed, fixed, fixed;
+animation: aquaBlobDrift 46s ease-in-out infinite;
 position: relative;
 }}
 @keyframes aquaBlobDrift {{
-0% {{ background-position: 0 0, top, top, 50% 48%, 48% 47%, top, bottom; }}
-50% {{ background-position: 0 0, top, top, 54% 51%, 53% 53%, top, bottom; }}
-100% {{ background-position: 0 0, top, top, 50% 48%, 48% 47%, top, bottom; }}
+0% {{ background-position: top, 48% 47%, top, bottom; }}
+50% {{ background-position: top, 53% 53%, top, bottom; }}
+100% {{ background-position: top, 48% 47%, top, bottom; }}
 }}
 @keyframes aquaBubbleDrift {{
 from {{ background-position: 0px 0px; }}
-to {{ background-position: -160px -960px; }}
+to {{ background-position: -500px -900px; }}
 }}
-/* Layer 4 — sparse, slow-floating bubbles drifting mostly upward, with a
-   faint overall glow so a few of them read as gently luminous rather
-   than flat cutouts. */
 .stApp::before {{
 content: "";
 position: fixed;
@@ -1166,24 +1055,15 @@ inset: 0;
 background-image: url("{_BUBBLES_BG_SVG}");
 background-repeat: repeat;
 background-size: 500px 500px;
-animation: aquaBubbleDrift 85s linear infinite;
-filter: drop-shadow(0 0 5px {AQUA_GLOW}22);
+animation: aquaBubbleDrift 70s linear infinite;
 pointer-events: none;
 z-index: -1;
 }}
-/* The "calm zone": a soft, translucent glass-white (or dark-teal in dark
-   mode) glow centered high behind the content column, like light pooling
-   down through water onto the chat card — the one spot where the
-   background intentionally quiets down so the UI stays the clear focal
-   point, while the richer wave/ribbon texture stays visible at the
-   edges. */
 .stApp::after {{
 content: "";
 position: fixed;
 inset: 0;
-background: radial-gradient(ellipse 820px 1200px at 50% 8%, {GLOW_CENTER_RGBA} 0%, {GLOW_MID_RGBA} 45%, transparent 78%);
-backdrop-filter: blur(3px);
--webkit-backdrop-filter: blur(3px);
+background: radial-gradient(ellipse 1200px 700px at 50% 0%, transparent 55%, {BRAND_BG}55 100%);
 pointer-events: none;
 z-index: -1;
 }}
