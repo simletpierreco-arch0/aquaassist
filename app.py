@@ -1154,7 +1154,12 @@ z-index: -1;
 
 CSS_BLOCK = f"""<style>
 html, body, [class*="css"] {{
-font-family: 'Poppins', 'Inter', sans-serif;
+/* Emoji fallback fonts appended after Poppins/Inter — those two fonts
+   have no emoji glyphs, so without an explicit emoji font in the stack
+   some browsers fall back to a flat/monochrome glyph instead of full
+   color emoji (this is what was making reaction icons, quick-action
+   icons, etc. look colorless). */
+font-family: 'Poppins', 'Inter', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Segoe UI Symbol', sans-serif;
 font-size: {BASE_FONT_SIZE};
 }}
 {_ATMOSPHERE_CSS}
@@ -1376,6 +1381,24 @@ padding: 0.3rem 0.8rem !important; background-color: {BRAND_PRIMARY}10 !importan
 border: 1px solid {BRAND_PRIMARY}35 !important; color: {BRAND_PRIMARY} !important; font-weight: 600 !important;
 }}
 div[class*="st-key-aqua_chip_wrap"] button:hover {{ background-color: {BRAND_PRIMARY}22 !important; transform: translateY(-1px); }}
+/* Reaction thumbs — full native emoji color always (overriding the
+   generic button rule's forced text color, which is what was making
+   these render flat/colorless), dimmed via opacity when unselected so
+   the chosen reaction still stands out once picked. */
+div[class*="st-key-aqua_react_up_"] button,
+div[class*="st-key-aqua_react_down_"] button {{
+background: transparent !important; border: 1px solid transparent !important; box-shadow: none !important;
+padding: 0.1rem 0.5rem !important; min-height: 2rem !important; height: 2rem !important;
+font-size: 1.15rem !important; color: initial !important; opacity: 0.45;
+transition: opacity 0.15s ease-in-out, transform 0.15s ease-in-out;
+}}
+div[class*="st-key-aqua_react_up_"] button:hover,
+div[class*="st-key-aqua_react_down_"] button:hover {{ opacity: 0.85; transform: scale(1.12); background: transparent !important; }}
+div[class*="st-key-aqua_react_up_active"] button,
+div[class*="st-key-aqua_react_down_active"] button {{
+opacity: 1 !important; background: {BRAND_PRIMARY}14 !important; border-radius: 999px !important;
+border: 1px solid {BRAND_PRIMARY}30 !important;
+}}
 /* Empty/first-load state polish — staggered fade/slide-in. Quick-action
    buttons are wrapped in a keyed container (div[class*="st-key-aqua_qa_wrap"])
    so nth-of-type targets each button's own Streamlit wrapper directly —
@@ -1518,11 +1541,21 @@ if not st.session_state.auth_done:
     _login_spacer, _login_dm_col = st.columns([0.78, 0.22])
     with _login_dm_col:
         st.markdown('<div class="aqua-login-dm-toggle">', unsafe_allow_html=True)
+        _dm_before = st.session_state.dark_mode
         st.session_state.dark_mode = st.toggle(
             "🌙 Dark", value=st.session_state.dark_mode, key="login_dark_mode_toggle",
             help="Preview AquaAssist in dark mode",
         )
         st.markdown('</div>', unsafe_allow_html=True)
+        # CSS_BLOCK (built from BRAND_* colors, which read st.session_state.dark_mode)
+        # is generated earlier in this same script run, before this toggle
+        # exists — so on the run where the click happens, the page has
+        # already rendered with the OLD colors. An explicit rerun forces one
+        # more pass so the very next paint picks up the new value; without
+        # this the toggle looked unresponsive and needed a second, unrelated
+        # interaction elsewhere on the page before it visibly took effect.
+        if st.session_state.dark_mode != _dm_before:
+            st.rerun()
 
     st.markdown(f"""<div class="aqua-login-header">
 <div class="aqua-login-header-center">
@@ -2272,20 +2305,26 @@ if active_tab == "chat":
                 st.caption("📚 Answered using NAWASA's knowledge base")
             # --- Message reactions (assistant replies only) — lightweight
             # thumbs up/down feedback stored per-message. Purely a UX
-            # signal (not wired to any backend), toggled on click.
+            # signal (not wired to any backend), toggled on click. Each
+            # button sits in its own keyed container (same "_active" suffix
+            # pattern as the nav bar) so the CSS below can give the
+            # selected thumb its full native color and a highlighted
+            # background, while the unselected one stays dimmed.
             if msg["role"] == "assistant":
                 reaction = msg.get("reaction")
                 rcol1, rcol2, rcol_spacer = st.columns([0.06, 0.06, 0.88])
                 with rcol1:
-                    up_label = "💙" if reaction == "up" else "🤍"
-                    if st.button(up_label, key=f"react_up_{msg_idx}", help="Helpful"):
-                        msg["reaction"] = None if reaction == "up" else "up"
-                        st.rerun()
+                    up_key = f"aqua_react_up_{msg_idx}" + ("_active" if reaction == "up" else "")
+                    with st.container(key=up_key):
+                        if st.button("👍", key=f"react_up_{msg_idx}", help="Helpful"):
+                            msg["reaction"] = None if reaction == "up" else "up"
+                            st.rerun()
                 with rcol2:
-                    down_label = "💔" if reaction == "down" else "🤍"
-                    if st.button(down_label, key=f"react_down_{msg_idx}", help="Not helpful"):
-                        msg["reaction"] = None if reaction == "down" else "down"
-                        st.rerun()
+                    down_key = f"aqua_react_down_{msg_idx}" + ("_active" if reaction == "down" else "")
+                    with st.container(key=down_key):
+                        if st.button("👎", key=f"react_down_{msg_idx}", help="Not helpful"):
+                            msg["reaction"] = None if reaction == "down" else "down"
+                            st.rerun()
 
     if not st.session_state.messages:
         # Chat bubbles already fade/slide in on render (see the
