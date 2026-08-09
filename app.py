@@ -1148,6 +1148,27 @@ font-family: 'Poppins', 'Inter', sans-serif;
 font-size: {BASE_FONT_SIZE};
 }}
 {_ATMOSPHERE_CSS}
+/* ---------------------------------------------------------------------
+   Make every Streamlit wrapper between the true page root and our own
+   content transparent. Streamlit's own theme paints an opaque background
+   on these inner containers (stAppViewContainer / stMain / the main
+   block wrapper), which otherwise sits ON TOP of the layered water
+   background declared on .stApp above and hides it completely — this is
+   the actual reason the background could disappear even though the
+   .stApp rules were correct. Every testid Streamlit has used for this
+   wrapper across recent versions is covered here defensively.
+   ------------------------------------------------------------------- */
+[data-testid="stAppViewContainer"],
+[data-testid="stAppViewBlockContainer"],
+[data-testid="stMain"],
+[data-testid="stMainBlockContainer"],
+[data-testid="stBottomBlockContainer"],
+section.main,
+.main {{
+background: transparent !important;
+background-color: transparent !important;
+background-image: none !important;
+}}
 ::-webkit-scrollbar {{ width: 8px; height: 8px; }}
 ::-webkit-scrollbar-track {{ background: {BRAND_BG}; }}
 ::-webkit-scrollbar-thumb {{ background: {BRAND_PRIMARY}55; border-radius: 10px; }}
