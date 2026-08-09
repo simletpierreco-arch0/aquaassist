@@ -14,6 +14,9 @@ Folder layout expected:
                                    AI assistant with a thin dashed "orbit"
                                    ring, generated to match the app's theme;
                                    see AVATAR_PATH)
+    assets/user_avatar.png.jpg (the customer's chat-bubble avatar — used
+                                 verbatim, never regenerated or modified;
+                                 see USER_AVATAR_PATH)
     assets/nawasa_logo.png    (the official NAWASA authority logo, shown on
                                 the login screen, header, and dashboard.)
     .streamlit/config.toml
@@ -60,15 +63,27 @@ amber "closing soon" state with a live countdown so customers know to call
 or WhatsApp before staff go home for the day — see get_business_hours_status()
 and the "closing_soon" / "minutes_until_close" fields it returns.
 
-VISUAL DESIGN NOTE: the background is a layered, low-opacity water motif
-(soft gradient + a bottom wave band + a very faint drifting bubble field —
-see _WAVE_BG_SVG / _BUBBLES_BG_SVG / the .stApp CSS rules) rather than a
-photographic ocean image, so it stays out of the way of the existing
-content at any screen size. The chat avatar (assets/aquaassist_avatar.png)
-carries the same accent color and a thin dashed "AI orbit" ring, which the
-CSS echoes as a soft glow behind the hero logo and message avatars — this
-recurring ring motif is the app's one signature visual detail; everything
-else stays quiet and card-based on purpose.
+VISUAL DESIGN NOTE (redesign pass): the background is now a deliberately
+layered "inside clear, sunlit water" environment rather than a flat color
+or a photographic ocean image — see _WAVE_BG_SVG / _BLOBS_BG_SVG /
+_BUBBLES_BG_SVG / _LIGHT_RAYS_SVG / _NOISE_SVG and the .stApp CSS rules.
+Each layer is independent (base gradient wash, slow-drifting abstract
+current blobs, soft light-ray shafts from the top, a faint bubble field,
+and a barely-visible grain texture) so the composition reads as intentional
+depth rather than a single gradient, while everything still degrades
+gracefully in high-contrast mode (which drops all decorative layers for
+maximum legibility). Content surfaces (cards, chat bubbles, the hero) use
+selective glassmorphism — translucent, blurred, softly bordered — so they
+read as floating above the water rather than sitting on top of a photo.
+
+The chat avatar (assets/aquaassist_avatar.png) carries the same accent
+color and a thin dashed "AI orbit" ring, which the CSS echoes as a soft
+glow behind the hero logo and message avatars — this recurring ring motif
+is the app's one signature visual detail; everything else stays quiet and
+card-based on purpose. The customer's own chat avatar is
+assets/user_avatar.png.jpg, used exactly as provided (never regenerated),
+with only CSS framing (circular clip, subtle ring/shadow) applied around
+it — see USER_AVATAR_PATH.
 """
 
 import os
@@ -247,6 +262,11 @@ LOGO_PATH = os.path.join("assets", "aquaassist_logo.png")
 # message avatars use this image. Falls back to the aquaassist_avatar.png
 # filename if the file isn't present at this path yet.
 AVATAR_PATH = os.path.join("assets", "aquaassist_avatar.png")
+# The customer's own chat-bubble avatar. This exact image is used verbatim —
+# never regenerated, replaced, or edited — only lightweight CSS framing
+# (circular clip, subtle ring/shadow) is applied around it in the chat UI.
+# Falls back to a plain emoji if the file isn't present on disk.
+USER_AVATAR_PATH = os.path.join("assets", "user_avatar.png.jpg")
 # Official NAWASA authority logo — shown on the login screen, chatbot
 # header, and welcome dashboard. Resolved relative to this file's own
 # folder (Path(__file__).parent) rather than the process's current working
@@ -964,6 +984,21 @@ def nawasa_logo_tag(size_px=56, css_class=""):
         return f'<img class="{classes}" src="data:image/png;base64,{nawasa_logo_b64}" style="width:{size_px}px;height:{size_px}px;" />'
     return f'<span class="aqua-login-nawasa-fallback {classes}" style="width:{size_px}px;height:{size_px}px;">NAWASA</span>'
 
+# ---------------------------------------------------------------------------
+# Layered water-environment background assets.
+#
+# The composition is built from independent SVG layers (rather than one
+# gradient) so each piece of "inside clear, sunlit water" reads separately:
+#   1. _WAVE_BG_SVG      — the bottom wave band (unchanged from before)
+#   2. _BLOBS_BG_SVG      — large soft-blurred "abstract current" shapes,
+#                            the main atmosphere layer, slowly drifting
+#   3. _LIGHT_RAYS_SVG    — faint diagonal light shafts from the top,
+#                            like sunlight filtering through clear water
+#   4. _BUBBLES_BG_SVG    — a small, faint, slowly-drifting bubble field
+#   5. _NOISE_SVG         — a barely-visible grain texture so the whole
+#                            thing doesn't read as a flat digital gradient
+# All layers are skipped in high-contrast mode for maximum legibility.
+# ---------------------------------------------------------------------------
 _WAVE_BG_SVG = (
     "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20"
     "viewBox='0%200%201200%20200'%20preserveAspectRatio='none'%3E"
@@ -976,22 +1011,40 @@ _WAVE_BG_SVG = (
     "%3C/svg%3E"
 )
 
-# Soft, blurred "ink in water" blobs — the main atmosphere layer behind the
-# whole app. Real Gaussian-blurred ellipses (not just soft-edged gradients)
-# in the brand's accent/primary/hover tones, scattered across a wide canvas
-# and stretched to cover the viewport, so the page reads like it's sitting
-# in gently diffused water light rather than on a flat color.
+# Soft, blurred "ink/current in water" blobs — the main atmosphere layer
+# behind the whole app. Real Gaussian-blurred, elongated organic shapes
+# (not simple circles) in the brand's accent/primary/hover tones, scattered
+# across a wide canvas and stretched to cover the viewport, so the page
+# reads like it's sitting in gently diffused, moving water rather than on
+# a flat color or a literal wave-repeat pattern.
 _BLOBS_BG_SVG = (
     "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20"
     "viewBox='0%200%201600%20900'%3E"
     "%3Cdefs%3E%3Cfilter%20id='aquaBlobBlur'%20x='-50%25'%20y='-50%25'%20width='200%25'%20height='200%25'%3E"
-    "%3CfeGaussianBlur%20stdDeviation='90'/%3E%3C/filter%3E%3C/defs%3E"
-    f"%3Cellipse%20cx='220'%20cy='160'%20rx='320'%20ry='220'%20fill='{BRAND_ACCENT.replace('#', '%23')}'%20fill-opacity='0.24'%20filter='url(%23aquaBlobBlur)'/%3E"
-    f"%3Cellipse%20cx='1400'%20cy='120'%20rx='260'%20ry='200'%20fill='{BRAND_PRIMARY.replace('#', '%23')}'%20fill-opacity='0.20'%20filter='url(%23aquaBlobBlur)'/%3E"
-    f"%3Cellipse%20cx='260'%20cy='760'%20rx='340'%20ry='240'%20fill='{BRAND_PRIMARY.replace('#', '%23')}'%20fill-opacity='0.18'%20filter='url(%23aquaBlobBlur)'/%3E"
-    f"%3Cellipse%20cx='1380'%20cy='780'%20rx='300'%20ry='220'%20fill='{BRAND_ACCENT.replace('#', '%23')}'%20fill-opacity='0.20'%20filter='url(%23aquaBlobBlur)'/%3E"
-    f"%3Cellipse%20cx='800'%20cy='450'%20rx='420'%20ry='260'%20fill='{BRAND_HOVER.replace('#', '%23')}'%20fill-opacity='0.14'%20filter='url(%23aquaBlobBlur)'/%3E"
+    "%3CfeGaussianBlur%20stdDeviation='95'/%3E%3C/filter%3E%3C/defs%3E"
+    f"%3Cellipse%20cx='180'%20cy='140'%20rx='360'%20ry='210'%20fill='{BRAND_ACCENT.replace('#', '%23')}'%20fill-opacity='0.24'%20filter='url(%23aquaBlobBlur)'%20transform='rotate(-18%20180%20140)'/%3E"
+    f"%3Cellipse%20cx='1420'%20cy='100'%20rx='300'%20ry='190'%20fill='{BRAND_PRIMARY.replace('#', '%23')}'%20fill-opacity='0.20'%20filter='url(%23aquaBlobBlur)'%20transform='rotate(14%201420%20100)'/%3E"
+    f"%3Cellipse%20cx='240'%20cy='780'%20rx='380'%20ry='230'%20fill='{BRAND_PRIMARY.replace('#', '%23')}'%20fill-opacity='0.18'%20filter='url(%23aquaBlobBlur)'%20transform='rotate(10%20240%20780)'/%3E"
+    f"%3Cellipse%20cx='1400'%20cy='800'%20rx='330'%20ry='210'%20fill='{BRAND_ACCENT.replace('#', '%23')}'%20fill-opacity='0.20'%20filter='url(%23aquaBlobBlur)'%20transform='rotate(-12%201400%20800)'/%3E"
+    f"%3Cellipse%20cx='800'%20cy='440'%20rx='460'%20ry='250'%20fill='{BRAND_HOVER.replace('#', '%23')}'%20fill-opacity='0.13'%20filter='url(%23aquaBlobBlur)'/%3E"
     "%3C/svg%3E"
+)
+
+# Faint diagonal light shafts, like sunlight slanting down through clear
+# water. Kept extremely soft (low opacity, wide feathered edges) so it
+# reads as ambient light rather than a spotlight or a UI element.
+_LIGHT_RAYS_SVG = (
+    "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20"
+    "viewBox='0%200%201000%201000'%3E"
+    "%3Cdefs%3E%3ClinearGradient%20id='aquaRayFade'%20x1='0'%20y1='0'%20x2='0'%20y2='1'%3E"
+    "%3Cstop%20offset='0%25'%20stop-color='%23FFFFFF'%20stop-opacity='0.5'/%3E"
+    "%3Cstop%20offset='100%25'%20stop-color='%23FFFFFF'%20stop-opacity='0'/%3E"
+    "%3C/linearGradient%3E%3C/defs%3E"
+    "%3Cg%20fill='url(%23aquaRayFade)'%3E"
+    "%3Cpolygon%20points='120,0%20260,0%20-40,900%20-220,900'/%3E"
+    "%3Cpolygon%20points='430,0%20530,0%20260,900%20130,900'/%3E"
+    "%3Cpolygon%20points='760,0%20890,0%20620,900%20470,900'/%3E"
+    "%3C/g%3E%3C/svg%3E"
 )
 
 # Very light, slow-drifting bubble/particle field for the main app background.
@@ -1017,6 +1070,17 @@ _BUBBLES_BG_SVG = (
     + "%3C/svg%3E"
 )
 
+# Barely-visible grain, purely so the large blurred gradients above don't
+# read as a flat digital wash. Kept to a tiny, near-invisible opacity.
+_NOISE_SVG = (
+    "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20"
+    "viewBox='0%200%20160%20160'%3E%3Cfilter%20id='aquaGrain'%3E"
+    "%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.9'%20numOctaves='2'%20stitchTiles='stitch'/%3E"
+    "%3CfeColorMatrix%20type='matrix'%20values='0%200%200%200%200%20"
+    "0%200%200%200%200%200%200%200%200%200%200%200%200%200.02%200'/%3E"
+    "%3C/filter%3E%3Crect%20width='100%25'%20height='100%25'%20filter='url(%23aquaGrain)'/%3E%3C/svg%3E"
+)
+
 if st.session_state.high_contrast:
     # High contrast mode intentionally skips all decorative texture — flat
     # background only, to keep contrast and legibility maximized.
@@ -1029,24 +1093,29 @@ else:
 background-color: {BRAND_BG};
 background-image:
 radial-gradient(ellipse 900px 500px at 50% -10%, {BRAND_ACCENT}22 0%, transparent 60%),
+url("{_LIGHT_RAYS_SVG}"),
 url("{_BLOBS_BG_SVG}"),
 linear-gradient(180deg, {BRAND_BG_SOFT} 0%, {BRAND_BG} 45%),
 url("{_WAVE_BG_SVG}");
-background-repeat: no-repeat, no-repeat, no-repeat, repeat-x;
-background-position: top, 50% 50%, top, bottom;
-background-size: 100% 100%, 120% 120%, 100% 420px, 1200px 200px;
-background-attachment: fixed, fixed, fixed, fixed;
+background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat-x;
+background-position: top, top, 50% 50%, top, bottom;
+background-size: 100% 100%, 100% 70%, 120% 120%, 100% 420px, 1200px 200px;
+background-attachment: fixed, fixed, fixed, fixed, fixed;
 animation: aquaBlobDrift 46s ease-in-out infinite;
 position: relative;
 }}
 @keyframes aquaBlobDrift {{
-0% {{ background-position: top, 48% 47%, top, bottom; }}
-50% {{ background-position: top, 53% 53%, top, bottom; }}
-100% {{ background-position: top, 48% 47%, top, bottom; }}
+0% {{ background-position: top, top, 48% 47%, top, bottom; }}
+50% {{ background-position: top, top, 53% 53%, top, bottom; }}
+100% {{ background-position: top, top, 48% 47%, top, bottom; }}
 }}
 @keyframes aquaBubbleDrift {{
 from {{ background-position: 0px 0px; }}
 to {{ background-position: -500px -900px; }}
+}}
+@keyframes aquaRayDrift {{
+0%, 100% {{ opacity: 0.55; transform: translateX(0); }}
+50% {{ opacity: 0.85; transform: translateX(14px); }}
 }}
 .stApp::before {{
 content: "";
@@ -1063,7 +1132,11 @@ z-index: -1;
 content: "";
 position: fixed;
 inset: 0;
-background: radial-gradient(ellipse 1200px 700px at 50% 0%, transparent 55%, {BRAND_BG}55 100%);
+background:
+url("{_NOISE_SVG}"),
+radial-gradient(ellipse 1200px 700px at 50% 0%, transparent 55%, {BRAND_BG}55 100%);
+background-repeat: repeat, no-repeat;
+background-size: 160px 160px, 100% 100%;
 pointer-events: none;
 z-index: -1;
 }}
@@ -1084,6 +1157,7 @@ font-size: {BASE_FONT_SIZE};
 @keyframes aquaPop {{ 0% {{ opacity: 0; transform: scale(0.92) translateY(8px); }} 60% {{ opacity: 1; transform: scale(1.01) translateY(0); }} 100% {{ opacity: 1; transform: scale(1) translateY(0); }} }}
 @keyframes aquaDotBounce {{ 0%, 80%, 100% {{ transform: translateY(0); opacity: 0.5; }} 40% {{ transform: translateY(-5px); opacity: 1; }} }}
 @keyframes aquaOrbitGlow {{ 0%, 100% {{ opacity: 0.55; }} 50% {{ opacity: 0.95; }} }}
+@keyframes aquaOnlineDotPulse {{ 0%, 100% {{ box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.5); }} 70% {{ box-shadow: 0 0 0 6px rgba(52, 211, 153, 0); }} }}
 * {{ scroll-behavior: smooth; }}
 .aqua-page {{ animation: aquaFadeUp 0.35s ease-out; }}
 .aqua-hero {{
@@ -1119,6 +1193,8 @@ animation: aquaOrbitGlow 3.4s ease-in-out infinite; pointer-events: none; z-inde
 .aqua-hero-nawasa-badge img {{ width: 100%; height: 100%; object-fit: contain; }}
 .aqua-hero-title {{ font-size: 1.7rem; font-weight: 800; color: #FFFFFF; line-height: 1.15; letter-spacing: -0.02em; }}
 .aqua-hero-subtitle {{ font-size: 0.92rem; color: rgba(255,255,255,0.9); font-weight: 500; }}
+.aqua-hero-online {{ display: inline-flex; align-items: center; gap: 0.35rem; margin-top: 0.35rem; font-size: 0.72rem; font-weight: 600; color: rgba(255,255,255,0.92); }}
+.aqua-hero-online-dot {{ width: 8px; height: 8px; border-radius: 50%; background: #34D399; box-shadow: 0 0 0 2px rgba(255,255,255,0.5); animation: aquaOnlineDotPulse 2.2s infinite; flex-shrink: 0; }}
 .aqua-hero-status {{ display: inline-flex; align-items: center; gap: 0.35rem; margin-top: 0.45rem; padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.02em; background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.28); color: #FFFFFF; }}
 .aqua-hero-status-dot {{ width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }}
 .aqua-hero-status-open .aqua-hero-status-dot {{ background: #34D399; box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.35); }}
@@ -1126,24 +1202,47 @@ animation: aquaOrbitGlow 3.4s ease-in-out infinite; pointer-events: none; z-inde
 .aqua-hero-status-closed .aqua-hero-status-dot {{ background: #FBBF6B; box-shadow: 0 0 0 3px rgba(251, 191, 107, 0.3); }}
 .aqua-wave {{ position: absolute; bottom: -2px; left: 0; width: 100%; line-height: 0; z-index: 1; }}
 .aqua-wave-fill {{ fill: {BRAND_BG}; }}
-.aqua-card {{ background: {BRAND_CARD}; border-radius: 18px; padding: 1.1rem 1.3rem; margin-bottom: 1rem; box-shadow: 0 2px 12px rgba(0, 114, 188, 0.08); border: 1px solid {BRAND_PRIMARY}22; animation: aquaFadeUp 0.4s ease-out; color: {BRAND_TEXT}; }}
+.aqua-card {{
+background: {BRAND_CARD}cc;
+backdrop-filter: blur(14px) saturate(1.4);
+-webkit-backdrop-filter: blur(14px) saturate(1.4);
+border-radius: 18px; padding: 1.1rem 1.3rem; margin-bottom: 1rem;
+box-shadow: 0 8px 28px rgba(0, 90, 156, 0.10), inset 0 1px 0 rgba(255,255,255,0.35);
+border: 1px solid {BRAND_PRIMARY}22; animation: aquaFadeUp 0.4s ease-out; color: {BRAND_TEXT};
+}}
 .aqua-section-label {{ display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; font-weight: 700; color: {BRAND_PRIMARY}; text-transform: uppercase; letter-spacing: 0.06em; margin: 1.4rem 0 0.6rem 0; }}
 .aqua-contact-row {{ display: flex; gap: 0.7rem; margin-bottom: 0.5rem; }}
-.aqua-contact-card {{ flex: 1; background: {BRAND_CARD}; border: 1px solid {BRAND_PRIMARY}22; border-radius: 16px; padding: 0.7rem 0.6rem; min-height: 44px; text-align: center; text-decoration: none !important; box-shadow: 0 2px 8px rgba(0, 90, 156, 0.06); transition: all 0.18s ease-in-out; }}
+.aqua-contact-card {{
+flex: 1; background: {BRAND_CARD}b3; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+border: 1px solid {BRAND_PRIMARY}22; border-radius: 16px; padding: 0.7rem 0.6rem; min-height: 44px;
+text-align: center; text-decoration: none !important; box-shadow: 0 2px 8px rgba(0, 90, 156, 0.06);
+transition: all 0.18s ease-in-out;
+}}
 .aqua-contact-card:hover {{ transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0, 90, 156, 0.18); border-color: {BRAND_ACCENT}88; }}
 .aqua-contact-icon {{ font-size: 1.3rem; display: block; margin-bottom: 0.2rem; }}
 .aqua-contact-label {{ font-size: 0.72rem; font-weight: 700; color: {BRAND_TEXT}; text-transform: uppercase; letter-spacing: 0.04em; display: block; }}
 .aqua-contact-value {{ font-size: 0.7rem; color: {BRAND_PRIMARY}; font-weight: 600; }}
 .aqua-status-badge {{ display: inline-block; padding: 0.2rem 0.7rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; background: {BRAND_PRIMARY}18; color: {BRAND_PRIMARY}; }}
-.aqua-faq-item {{ background: {BRAND_CARD}; border: 1px solid {BRAND_PRIMARY}22; border-radius: 14px; padding: 0.8rem 1rem; margin-bottom: 0.6rem; color: {BRAND_TEXT}; transition: box-shadow 0.15s ease-in-out; }}
+.aqua-faq-item {{
+background: {BRAND_CARD}cc; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+border: 1px solid {BRAND_PRIMARY}22; border-radius: 14px; padding: 0.8rem 1rem; margin-bottom: 0.6rem;
+color: {BRAND_TEXT}; transition: box-shadow 0.15s ease-in-out;
+}}
 .aqua-faq-item:hover {{ box-shadow: 0 4px 14px rgba(0, 114, 188, 0.1); }}
 .aqua-faq-cat {{ font-size: 0.68rem; font-weight: 700; color: {BRAND_ACCENT}; text-transform: uppercase; letter-spacing: 0.05em; }}
-[data-testid="stChatMessage"] {{ border-radius: 18px; padding: 0.75rem 1rem; margin-bottom: 0.75rem; box-shadow: 0 2px 10px rgba(0, 90, 156, 0.07); animation: aquaFadeUp 0.3s ease-out; border: 1px solid transparent; gap: 0.65rem; transition: box-shadow 0.15s ease-in-out; }}
-[data-testid="stChatMessage"] [data-testid="stChatMessageAvatarAssistant"], [data-testid="stChatMessage"] [data-testid="stChatMessageAvatarUser"] {{ box-shadow: 0 0 0 2px {BRAND_CARD}, 0 0 0 3px {BRAND_PRIMARY}30; }}
+[data-testid="stChatMessage"] {{
+border-radius: 18px; padding: 0.75rem 1rem; margin-bottom: 0.75rem;
+box-shadow: 0 4px 16px rgba(0, 90, 156, 0.10); animation: aquaFadeUp 0.3s ease-out;
+border: 1px solid transparent; gap: 0.65rem; transition: box-shadow 0.15s ease-in-out;
+backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}}
+[data-testid="stChatMessage"] [data-testid="stChatMessageAvatarAssistant"], [data-testid="stChatMessage"] [data-testid="stChatMessageAvatarUser"] {{ box-shadow: 0 0 0 2px {BRAND_CARD}, 0 0 0 3px {BRAND_PRIMARY}30; border-radius: 50%; overflow: hidden; }}
 [data-testid="stChatMessage"] [data-testid="stChatMessageAvatarAssistant"] {{ box-shadow: 0 0 0 2px {BRAND_CARD}, 0 0 0 3px {BRAND_ACCENT}55, 0 0 12px {BRAND_ACCENT}40; }}
-[data-testid="stChatMessage"]:has(img[alt="assistant avatar"]), [data-testid="stChatMessageAvatarAssistant"] ~ div, div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {{ background: {BRAND_CARD}; border: 1px solid {ASSISTANT_BUBBLE_BORDER}; border-radius: 6px 18px 18px 18px; color: {ASSISTANT_BUBBLE_TEXT}; }}
+[data-testid="stChatMessage"] [data-testid="stChatMessageAvatarAssistant"] img {{ object-fit: cover; }}
+[data-testid="stChatMessage"] [data-testid="stChatMessageAvatarUser"] img {{ object-fit: cover; }}
+[data-testid="stChatMessage"]:has(img[alt="assistant avatar"]), [data-testid="stChatMessageAvatarAssistant"] ~ div, div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {{ background: {BRAND_CARD}d9; border: 1px solid {ASSISTANT_BUBBLE_BORDER}; border-radius: 6px 18px 18px 18px; color: {ASSISTANT_BUBBLE_TEXT}; }}
 [data-testid="stChatMessage"]:has(img[alt="assistant avatar"]) p, div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) p {{ color: {ASSISTANT_BUBBLE_TEXT}; }}
-div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {{ background: {USER_BUBBLE_BG}; border: 1px solid {USER_BUBBLE_BG}; border-radius: 18px 6px 18px 18px; flex-direction: row-reverse; text-align: right; }}
+div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {{ background: {USER_BUBBLE_BG}e6; border: 1px solid {USER_BUBBLE_BG}; border-radius: 18px 6px 18px 18px; flex-direction: row-reverse; text-align: right; }}
 div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) p {{ color: {USER_BUBBLE_TEXT}; }}
 [data-testid="stSpinner"] > div {{ display: flex; align-items: center; gap: 0.5rem; color: {BRAND_PRIMARY}; font-weight: 600; }}
 [data-testid="stSpinner"] svg {{ display: none; }}
@@ -1153,7 +1252,7 @@ background-image: radial-gradient({BRAND_PRIMARY} 40%, transparent 41%), radial-
 background-size: 8px 8px; background-repeat: no-repeat; background-position: 0 center, 13px center, 26px center;
 animation: aquaDotBounce 1.2s infinite ease-in-out;
 }}
-div.stButton > button {{ border-radius: 12px; border: 1px solid {BRAND_PRIMARY}30; background-color: {BRAND_CARD}; color: {BRAND_PRIMARY}; font-weight: 600; padding: 0.7rem 0.6rem; min-height: 44px; box-shadow: 0 2px 6px rgba(0, 90, 156, 0.06); transition: all 0.18s ease-in-out; }}
+div.stButton > button {{ border-radius: 12px; border: 1px solid {BRAND_PRIMARY}30; background-color: {BRAND_CARD}e6; backdrop-filter: blur(6px); color: {BRAND_PRIMARY}; font-weight: 600; padding: 0.7rem 0.6rem; min-height: 44px; box-shadow: 0 2px 6px rgba(0, 90, 156, 0.06); transition: all 0.18s ease-in-out; }}
 div.stButton > button:hover {{ border-color: {BRAND_HOVER}; color: {BRAND_HOVER}; background-color: {BRAND_BG_SOFT}; box-shadow: 0 6px 16px rgba(0, 90, 156, 0.16); transform: translateY(-2px); }}
 div.stButton > button:focus-visible {{ outline: 2px solid {BRAND_ACCENT}; outline-offset: 2px; }}
 div.stButton > button:active {{ transform: translateY(0px) scale(0.98); }}
@@ -1170,7 +1269,7 @@ white-space: normal; line-height: 1.15; padding: 0.35rem 0.2rem !important; over
 div[class*="st-key-aqua_nav_"][class*="_active"] button {{ background-color: {BRAND_PRIMARY} !important; color: #FFFFFF !important; border-color: {BRAND_PRIMARY} !important; font-weight: 700 !important; box-shadow: 0 4px 14px rgba(0, 90, 156, 0.28) !important; transform: translateY(-1px); }}
 div[class*="st-key-aqua_nav_"][class*="_active"] button:hover {{ background-color: {BRAND_HOVER} !important; color: #FFFFFF !important; }}
 div[class*="st-key-aqua_nav_"][class*="_active"] button::after {{ content: ""; position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%); width: 55%; height: 3px; border-radius: 3px; background-color: {BRAND_ACCENT}; }}
-section[data-testid="stSidebar"] {{ background-color: {BRAND_CARD}; background-image: url("{_WAVE_BG_SVG}"); background-repeat: repeat-x; background-position: bottom; background-size: 900px 150px; border-right: 1px solid {BRAND_PRIMARY}22; }}
+section[data-testid="stSidebar"] {{ background-color: {BRAND_CARD}e6; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); background-image: url("{_WAVE_BG_SVG}"); background-repeat: repeat-x; background-position: bottom; background-size: 900px 150px; border-right: 1px solid {BRAND_PRIMARY}22; }}
 .aqua-sidebar-newchat button {{ background-color: {BRAND_PRIMARY} !important; color: #FFFFFF !important; border: none !important; width: 100%; font-weight: 700; }}
 .aqua-sidebar-newchat button:hover {{ background-color: {BRAND_HOVER} !important; transform: none; }}
 .aqua-history-btn button {{ text-align: left !important; justify-content: flex-start !important; background: transparent !important; box-shadow: none !important; border: none !important; padding: 0.4rem 0.3rem !important; font-weight: 500 !important; color: {BRAND_TEXT} !important; }}
@@ -1194,7 +1293,7 @@ section[data-testid="stSidebar"] {{ background-color: {BRAND_CARD}; background-i
 .aqua-mic-btn button {{ border-radius: 50% !important; width: 2.75rem !important; height: 2.75rem !important; min-height: 2.75rem !important; padding: 0 !important; font-size: 1.1rem !important; }}
 [data-testid="stChatInput"] {{ border-radius: 20px; }}
 [data-testid="stChatInput"] textarea {{ font-size: 0.95rem; padding-top: 0.65rem; padding-bottom: 0.65rem; }}
-[data-testid="stChatInputContainer"] {{ border-radius: 20px !important; border: 1px solid {BRAND_PRIMARY}30 !important; box-shadow: 0 2px 10px rgba(0, 90, 156, 0.06); transition: box-shadow 0.15s ease-in-out, border-color 0.15s ease-in-out; }}
+[data-testid="stChatInputContainer"] {{ background: {BRAND_CARD}d9 !important; backdrop-filter: blur(10px); border-radius: 20px !important; border: 1px solid {BRAND_PRIMARY}30 !important; box-shadow: 0 2px 10px rgba(0, 90, 156, 0.06); transition: box-shadow 0.15s ease-in-out, border-color 0.15s ease-in-out; }}
 [data-testid="stChatInputContainer"]:focus-within {{ border-color: {BRAND_ACCENT} !important; box-shadow: 0 0 0 3px {BRAND_ACCENT}22; }}
 button[data-testid="stChatInputSubmitButton"] {{ background-color: {BRAND_PRIMARY} !important; border-radius: 50% !important; color: #FFFFFF !important; position: relative; transition: background-color 0.15s ease-in-out, transform 0.15s ease-in-out; }}
 button[data-testid="stChatInputSubmitButton"]:hover {{ background-color: {BRAND_HOVER} !important; transform: scale(1.06); }}
@@ -1868,6 +1967,11 @@ elif hours_status["is_open"]:
 else:
     status_pill_html = f'<div class="aqua-hero-status aqua-hero-status-closed"><span class="aqua-hero-status-dot"></span>Offices Closed — reopens {hours_status["reopens_label"]}</div>'
 
+# AquaAssist itself is always reachable (24/7 AI availability), independent
+# of NAWASA's human office hours above — shown as its own small "online"
+# indicator under the hero title, distinct from the office-hours pill.
+online_pill_html = '<div class="aqua-hero-online"><span class="aqua-hero-online-dot"></span>AquaAssist Online</div>'
+
 nawasa_badge_inner = (f'<img src="data:image/png;base64,{nawasa_logo_b64}" />' if nawasa_logo_b64
                       else '<span style="font-size:0.55rem;font-weight:800;color:{0};text-align:center;">NAWASA</span>'.format(BRAND_HOVER))
 
@@ -1878,6 +1982,7 @@ chat_hero = f"""<div class="aqua-hero">
 <div>
 <div class="aqua-hero-title">AquaAssist</div>
 <div class="aqua-hero-subtitle">NAWASA Official Virtual Assistant</div>
+{online_pill_html}
 {status_pill_html}
 <div class="aqua-demo-tag aqua-hero-demo-tag">Demo - Developed by Sub Pod-1</div>
 </div>
@@ -1938,11 +2043,13 @@ if active_tab == "chat":
         )
     st.markdown(contact_row_html, unsafe_allow_html=True)
 
-    # NOTE: previously fell back to the 💧 emoji when the avatar image file
-    # wasn't present. Now falls back to the file name string itself, per
-    # request.
+    # Falls back to the file name string (not an emoji) if the AquaAssist
+    # avatar image isn't present, per the original app's convention.
     ASSISTANT_AVATAR = AVATAR_PATH if os.path.exists(AVATAR_PATH) else "aquaassist_avatar.png"
-    USER_AVATAR = "🧑"
+    # Uses the customer's own uploaded avatar image exactly as provided —
+    # never regenerated — falling back to a plain emoji only if that file
+    # genuinely isn't on disk.
+    USER_AVATAR = USER_AVATAR_PATH if os.path.exists(USER_AVATAR_PATH) else "🧑"
 
     for msg in st.session_state.messages:
         avatar = ASSISTANT_AVATAR if msg["role"] == "assistant" else USER_AVATAR
