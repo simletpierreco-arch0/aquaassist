@@ -812,6 +812,16 @@ def log_water_report(location: str, issue_type: str, description: str,
         A confirmation message including the reference number for tracking.
     """
     reference = save_report(name, phone, location, issue_type, description, severity=severity)
+    # Stashed so the calling Streamlit turn can render a polished report
+    # card under the AI's reply instead of relying on the model to spell
+    # the details out in plain text — see render_report_card().
+    try:
+        st.session_state["_last_logged_report"] = {
+            "reference": reference, "status": "Received",
+            "issue_type": issue_type, "severity": severity,
+        }
+    except Exception:
+        pass
     return f"Report logged successfully. Reference number: {reference}. A technician will follow up."
 
 # ---------------------------------------------------------------------------
@@ -1329,6 +1339,55 @@ background-repeat: no-repeat, repeat-x !important;
 background-position: top, bottom !important;
 background-size: 100% 100%, 1200px 200px !important;
 }}
+.aqua-login-dm-toggle {{ display: flex; justify-content: flex-end; margin-bottom: -0.4rem; }}
+.aqua-login-dm-toggle [data-testid="stWidgetLabel"] p {{ font-size: 0.72rem !important; }}
+/* In-chat typing indicator — three dots bouncing inside the assistant's
+   own bubble background, so it reads as "AquaAssist is typing" rather
+   than a generic page loader. */
+.aqua-typing-bubble {{ display: flex; align-items: center; gap: 5px; padding: 0.15rem 0.1rem; }}
+.aqua-typing-bubble span {{
+display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+background: {BRAND_PRIMARY}; opacity: 0.6; animation: aquaDotBounce 1.1s infinite ease-in-out;
+}}
+.aqua-typing-bubble span:nth-child(2) {{ animation-delay: 0.15s; }}
+.aqua-typing-bubble span:nth-child(3) {{ animation-delay: 0.3s; }}
+/* Report confirmation card — shown under an AI reply that logged a report,
+   or after a manual form submission, instead of a plain success banner. */
+.aqua-report-card {{
+background: linear-gradient(135deg, {BRAND_CARD}f2, {BRAND_BG_SOFT}f2);
+backdrop-filter: blur(10px); border: 1px solid {BRAND_PRIMARY}2a; border-radius: 14px;
+padding: 0.75rem 0.9rem; margin: 0.35rem 0 0.5rem 0; box-shadow: 0 4px 14px rgba(0,90,156,0.10);
+animation: aquaPop 0.35s ease-out;
+}}
+.aqua-report-card-head {{ display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; }}
+.aqua-report-card-icon {{ font-size: 1.3rem; }}
+.aqua-report-card-title {{ font-size: 0.78rem; font-weight: 700; color: {BRAND_TEXT}99; text-transform: uppercase; letter-spacing: 0.04em; }}
+.aqua-report-card-ref {{ font-size: 1.05rem; font-weight: 800; color: {BRAND_PRIMARY}; letter-spacing: 0.02em; }}
+.aqua-report-card-rows {{ display: flex; flex-direction: column; gap: 0.3rem; }}
+.aqua-report-card-row {{ display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; color: {BRAND_TEXT}; }}
+.aqua-report-card-row span {{ color: {BRAND_TEXT}99; }}
+/* Suggested follow-up chips — styled via the keyed wrapper container
+   (div[class*="st-key-aqua_chip_wrap"]) so the rule reaches the actual
+   button DOM node; raw st.markdown divs around a widget don't nest. */
+div[class*="st-key-aqua_chip_wrap"] {{ margin: 0.2rem 0 0.6rem 0; }}
+div[class*="st-key-aqua_chip_wrap"] button {{
+border-radius: 999px !important; font-size: 0.78rem !important; min-height: 2.2rem !important;
+padding: 0.3rem 0.8rem !important; background-color: {BRAND_PRIMARY}10 !important;
+border: 1px solid {BRAND_PRIMARY}35 !important; color: {BRAND_PRIMARY} !important; font-weight: 600 !important;
+}}
+div[class*="st-key-aqua_chip_wrap"] button:hover {{ background-color: {BRAND_PRIMARY}22 !important; transform: translateY(-1px); }}
+/* Empty/first-load state polish — staggered fade/slide-in. Quick-action
+   buttons are wrapped in a keyed container (div[class*="st-key-aqua_qa_wrap"])
+   so nth-of-type targets each button's own Streamlit wrapper directly —
+   two raw st.markdown calls around a widget do NOT nest in the real DOM,
+   so this container approach is used instead of wrapping divs. */
+div[class*="st-key-aqua_qa_wrap"] div[data-testid="stButton"] {{ opacity: 0; animation: aquaFadeUp 0.45s ease-out forwards; }}
+div[class*="st-key-aqua_qa_wrap"] div[data-testid="stButton"]:nth-of-type(1) {{ animation-delay: 0ms; }}
+div[class*="st-key-aqua_qa_wrap"] div[data-testid="stButton"]:nth-of-type(2) {{ animation-delay: 70ms; }}
+div[class*="st-key-aqua_qa_wrap"] div[data-testid="stButton"]:nth-of-type(3) {{ animation-delay: 140ms; }}
+div[class*="st-key-aqua_qa_wrap"] div[data-testid="stButton"]:nth-of-type(4) {{ animation-delay: 210ms; }}
+div[class*="st-key-aqua_qa_wrap"] div[data-testid="stButton"]:nth-of-type(5) {{ animation-delay: 280ms; }}
+div[class*="st-key-aqua_qa_wrap"] div[data-testid="stButton"]:nth-of-type(6) {{ animation-delay: 350ms; }}
 .aqua-footer {{ text-align: center; font-size: 0.72rem; color: {BRAND_TEXT}99; padding: 0.9rem 0 0.3rem 0; letter-spacing: 0.02em; }}
 .aqua-footer strong {{ color: {BRAND_PRIMARY}; font-weight: 700; }}
 .aqua-hours-banner {{ display: flex; align-items: flex-start; gap: 0.55rem; background: {HOURS_BANNER_BG}; border: 1px solid {HOURS_BANNER_BORDER}; border-radius: 14px; padding: 0.65rem 0.9rem; margin-bottom: 0.85rem; color: {HOURS_BANNER_TEXT}; font-size: 0.8rem; line-height: 1.45; animation: aquaFadeUp 0.3s ease-out; }}
@@ -1455,6 +1514,15 @@ st.markdown(
 # ---------------------------------------------------------------------------
 if not st.session_state.auth_done:
     st.markdown('<div class="aqua-login-wrap">', unsafe_allow_html=True)
+
+    _login_spacer, _login_dm_col = st.columns([0.78, 0.22])
+    with _login_dm_col:
+        st.markdown('<div class="aqua-login-dm-toggle">', unsafe_allow_html=True)
+        st.session_state.dark_mode = st.toggle(
+            "🌙 Dark", value=st.session_state.dark_mode, key="login_dark_mode_toggle",
+            help="Preview AquaAssist in dark mode",
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown(f"""<div class="aqua-login-header">
 <div class="aqua-login-header-center">
@@ -1886,6 +1954,124 @@ def _build_composed_location():
     loc += f" (GPS: {pin['lat']:.5f}, {pin['lng']:.5f})"
     return loc
 
+# ---------------------------------------------------------------------------
+# In-chat typing indicator — an animated three-dot bubble rendered in the
+# assistant's own avatar/style, shown while a reply is being generated.
+# Purely ephemeral: it's drawn once during the blocking API call and never
+# stored in st.session_state.messages, so it disappears naturally on the
+# st.rerun() that follows every reply (same lifecycle as st.spinner, just
+# styled to look like part of the conversation instead of a page loader).
+# ---------------------------------------------------------------------------
+def render_typing_indicator(avatar):
+    with st.chat_message("assistant", avatar=avatar):
+        st.markdown(
+            '<div class="aqua-typing-bubble">'
+            '<span></span><span></span><span></span>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+# ---------------------------------------------------------------------------
+# Report confirmation card — renders a small polished status card (instead
+# of a plain st.success line) whenever a report reference number exists,
+# used both for reports the AI logs mid-conversation via log_water_report
+# and for the manual "Report & Track" form submission.
+# ---------------------------------------------------------------------------
+def render_report_card(card):
+    severity = card.get("severity", "Unknown")
+    severity_colors = {
+        "Unknown": (BRAND_PRIMARY, f"{BRAND_PRIMARY}18"),
+        "Low": ("#2E9E5B", "#2E9E5B18"),
+        "Medium": ("#C98A11", "#C98A1118"),
+        "High": ("#D64545", "#D6454518"),
+    }
+    sev_color, sev_bg = severity_colors.get(severity, severity_colors["Unknown"])
+    st.markdown(f"""<div class="aqua-report-card">
+<div class="aqua-report-card-head">
+<span class="aqua-report-card-icon">✅</span>
+<div>
+<div class="aqua-report-card-title">Report logged</div>
+<div class="aqua-report-card-ref">{card.get('reference', '')}</div>
+</div>
+</div>
+<div class="aqua-report-card-rows">
+<div class="aqua-report-card-row"><span>Status</span><b>{card.get('status', 'Received')}</b></div>
+<div class="aqua-report-card-row"><span>Issue</span><b>{card.get('issue_type', '—')}</b></div>
+<div class="aqua-report-card-row"><span>Severity</span><b style="color:{sev_color};background:{sev_bg};padding:0.05rem 0.5rem;border-radius:999px;">{severity}</b></div>
+</div>
+</div>""", unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# Suggested follow-up chips — a small, cheap keyword match against the most
+# recent exchange to offer 2-3 relevant next steps as tappable chips, so
+# customers can continue without retyping. Falls back to a general set.
+# ---------------------------------------------------------------------------
+def suggest_followup_chips(messages):
+    recent_text = " ".join(m.get("content", "") for m in messages[-3:]).lower()
+    topic_chips = [
+        (("leak", "burst", "hydrant", "drip"), [
+            ("📷 Send a photo", "I'd like to send a photo of the issue."),
+            ("📍 Update location", "I need to update the location of my report."),
+            ("👤 Talk to an agent", t("qa_rep_prompt")),
+        ]),
+        (("bill", "payment", "arrears", "invoice"), [
+            ("📄 Check my balance", t("qa_checkbill_prompt")),
+            ("💳 Payment options", t("qa_bill_prompt")),
+            ("👤 Talk to an agent", t("qa_rep_prompt")),
+        ]),
+        (("outage", "no water", "supply", "maintenance"), [
+            ("🚰 Any updates?", "Are there any updates on the outage in my area?"),
+            ("📍 Office locations", t("qa_locations_prompt")),
+            ("👤 Talk to an agent", t("qa_rep_prompt")),
+        ]),
+    ]
+    for keywords, chips in topic_chips:
+        if any(k in recent_text for k in keywords):
+            return chips
+    return [
+        ("👷 Report a leak", t("qa_report_prompt")),
+        ("💳 Billing help", t("qa_bill_prompt")),
+        ("👤 Talk to an agent", t("qa_rep_prompt")),
+    ]
+
+# ---------------------------------------------------------------------------
+# Customer-facing live outage map — a read-only view of all currently
+# active/upcoming NAWASA outage announcements across every parish (staff
+# post these from the Staff Portal). Uses the interactive Folium map when
+# available, and a plain list otherwise.
+# ---------------------------------------------------------------------------
+def render_customer_outage_map():
+    outages_df = load_outages()
+    if outages_df.empty:
+        return
+    today = datetime.now().strftime("%Y-%m-%d")
+    active = outages_df[
+        (outages_df["start_date"].astype(str) <= today) & (outages_df["end_date"].astype(str) >= today)
+    ]
+    if active.empty:
+        return
+    with st.expander(f"🗺️ Live outage map — {len(active)} active announcement(s)", expanded=False):
+        if HAS_MAP:
+            outage_map = folium.Map(
+                location=[GRENADA_CENTER[0], GRENADA_CENTER[1]], zoom_start=10,
+                tiles="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+                attr="Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)",
+            )
+            for _, row in active.iterrows():
+                center = PARISH_CENTERS.get(row["parish"], GRENADA_CENTER)
+                folium.Circle(
+                    location=list(center), radius=3500, color="#F5A623", fill=True,
+                    fill_color="#F5A623", fill_opacity=0.35,
+                    popup=folium.Popup(f"<b>{row['parish']}</b><br>{row['message']}<br>"
+                                        f"{row['start_date']} – {row['end_date']}", max_width=220),
+                    tooltip=row["parish"],
+                ).add_to(outage_map)
+            st_folium(outage_map, height=320, use_container_width=True, key="customer_outage_map")
+        else:
+            st.caption(t("map_not_installed"))
+        for _, row in active.iterrows():
+            st.markdown(f"**{row['parish']}** ({row['start_date']} – {row['end_date']}): {row['message']}")
+
 if logo_b64:
     logo_html = f'<img src="data:image/png;base64,{logo_b64}" />'
 elif avatar_b64:
@@ -2072,7 +2258,7 @@ if active_tab == "chat":
     # genuinely isn't on disk.
     USER_AVATAR = USER_AVATAR_PATH if os.path.exists(USER_AVATAR_PATH) else "🧑"
 
-    for msg in st.session_state.messages:
+    for msg_idx, msg in enumerate(st.session_state.messages):
         avatar = ASSISTANT_AVATAR if msg["role"] == "assistant" else USER_AVATAR
         with st.chat_message(msg["role"], avatar=avatar):
             st.markdown(msg["content"])
@@ -2080,10 +2266,51 @@ if active_tab == "chat":
                 st.audio(msg["audio"])
             if msg.get("attachment_name"):
                 st.caption(f"📎 {msg['attachment_name']}")
+            if msg.get("report_card"):
+                render_report_card(msg["report_card"])
+            if msg.get("used_knowledge_base"):
+                st.caption("📚 Answered using NAWASA's knowledge base")
+            # --- Message reactions (assistant replies only) — lightweight
+            # thumbs up/down feedback stored per-message. Purely a UX
+            # signal (not wired to any backend), toggled on click.
+            if msg["role"] == "assistant":
+                reaction = msg.get("reaction")
+                rcol1, rcol2, rcol_spacer = st.columns([0.06, 0.06, 0.88])
+                with rcol1:
+                    up_label = "💙" if reaction == "up" else "🤍"
+                    if st.button(up_label, key=f"react_up_{msg_idx}", help="Helpful"):
+                        msg["reaction"] = None if reaction == "up" else "up"
+                        st.rerun()
+                with rcol2:
+                    down_label = "💔" if reaction == "down" else "🤍"
+                    if st.button(down_label, key=f"react_down_{msg_idx}", help="Not helpful"):
+                        msg["reaction"] = None if reaction == "down" else "down"
+                        st.rerun()
 
     if not st.session_state.messages:
+        # Chat bubbles already fade/slide in on render (see the
+        # [data-testid="stChatMessage"] animation rule), so the welcome
+        # message gets the same soft entrance automatically.
         with st.chat_message("assistant", avatar=ASSISTANT_AVATAR):
             st.markdown(t("welcome"))
+
+    # --- Suggested follow-up chips — shown only after the most recent
+    # assistant reply, so the customer can keep the conversation moving
+    # with a tap instead of retyping. Topic is guessed from the last
+    # exchange; falls back to a general-purpose set if nothing matches.
+    if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
+        followups = suggest_followup_chips(st.session_state.messages)
+        if followups:
+            chip_clicked = None
+            with st.container(key="aqua_chip_wrap"):
+                chip_cols = st.columns(len(followups))
+                for chip_idx, (chip_col, (chip_label, chip_prompt)) in enumerate(zip(chip_cols, followups)):
+                    with chip_col:
+                        if st.button(chip_label, key=f"chip_{len(st.session_state.messages)}_{chip_idx}", use_container_width=True):
+                            chip_clicked = chip_prompt
+            if chip_clicked:
+                st.session_state["_queued_followup"] = chip_clicked
+                st.rerun()
 
     input_row = st.columns([0.09, 0.09, 0.08, 0.74])
     with input_row[0]:
@@ -2152,13 +2379,19 @@ if active_tab == "chat":
     st.markdown(f'<div class="aqua-section-label">{t("quick_actions")}</div>', unsafe_allow_html=True)
     qa_items = list(quick_actions.items())
     queued_prompt = None
-    for row_start in range(0, len(qa_items), 2):
-        row_items = qa_items[row_start:row_start + 2]
-        qa_cols = st.columns(len(row_items))
-        for qa_idx, (col, (label, info)) in enumerate(zip(qa_cols, row_items), start=row_start):
-            with col:
-                if st.button(label, use_container_width=True, key=f"qa_{qa_idx}", help=info["desc"]):
-                    queued_prompt = info["prompt"]
+    with st.container(key="aqua_qa_wrap"):
+        for row_start in range(0, len(qa_items), 2):
+            row_items = qa_items[row_start:row_start + 2]
+            qa_cols = st.columns(len(row_items))
+            for qa_idx, (col, (label, info)) in enumerate(zip(qa_cols, row_items), start=row_start):
+                with col:
+                    if st.button(label, use_container_width=True, key=f"qa_{qa_idx}", help=info["desc"]):
+                        queued_prompt = info["prompt"]
+
+    render_customer_outage_map()
+
+    if st.session_state.get("_queued_followup"):
+        queued_prompt = st.session_state.pop("_queued_followup")
 
     user_turn = None
     is_audio_turn = False
@@ -2183,22 +2416,27 @@ if active_tab == "chat":
             if not allowed:
                 reply_text = usage_limit_message(limit_reason)
             else:
-                with st.spinner("Listening..."):
-                    try:
-                        audio_part = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
-                        bot_response = st.session_state.chat.send_message([
-                            audio_part,
-                            "Please respond to this voice message from a NAWASA customer.",
-                        ])
-                        reply_text = bot_response.text
-                    except Exception as e:
-                        reply_text = f"⚠️ Error processing voice message: {e}"
+                render_typing_indicator(ASSISTANT_AVATAR)
+                st.session_state.pop("_last_logged_report", None)
+                try:
+                    audio_part = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
+                    bot_response = st.session_state.chat.send_message([
+                        audio_part,
+                        "Please respond to this voice message from a NAWASA customer.",
+                    ])
+                    reply_text = bot_response.text
+                except Exception as e:
+                    reply_text = f"⚠️ Error processing voice message: {e}"
 
             reply_audio = None
             if st.session_state.voice_replies:
                 reply_audio = speak_text(reply_text, "en")
 
-            st.session_state.messages.append({"role": "assistant", "content": reply_text, "audio": reply_audio})
+            new_msg = {"role": "assistant", "content": reply_text, "audio": reply_audio}
+            _logged = st.session_state.pop("_last_logged_report", None)
+            if _logged:
+                new_msg["report_card"] = _logged
+            st.session_state.messages.append(new_msg)
             st.rerun()
         elif is_photo_turn:
             _, photo_bytes, photo_mime_type = user_turn
@@ -2216,25 +2454,30 @@ if active_tab == "chat":
             if not allowed:
                 reply_text = usage_limit_message(limit_reason)
             else:
-                with st.spinner("Thinking..."):
-                    try:
-                        photo_part = types.Part.from_bytes(data=photo_bytes, mime_type=photo_mime_type)
-                        bot_response = st.session_state.chat.send_message([
-                            photo_part,
-                            "The customer just took and sent a photo of a NAWASA water service "
-                            "issue (e.g. a leak, burst pipe, or damaged hydrant) using their camera. "
-                            "Look at what's visible and respond helpfully — ask for the location and "
-                            "any other missing details if you don't already have them.",
-                        ])
-                        reply_text = bot_response.text
-                    except Exception as e:
-                        reply_text = f"⚠️ Error: {e}"
+                render_typing_indicator(ASSISTANT_AVATAR)
+                st.session_state.pop("_last_logged_report", None)
+                try:
+                    photo_part = types.Part.from_bytes(data=photo_bytes, mime_type=photo_mime_type)
+                    bot_response = st.session_state.chat.send_message([
+                        photo_part,
+                        "The customer just took and sent a photo of a NAWASA water service "
+                        "issue (e.g. a leak, burst pipe, or damaged hydrant) using their camera. "
+                        "Look at what's visible and respond helpfully — ask for the location and "
+                        "any other missing details if you don't already have them.",
+                    ])
+                    reply_text = bot_response.text
+                except Exception as e:
+                    reply_text = f"⚠️ Error: {e}"
 
             reply_audio = None
             if st.session_state.voice_replies:
                 reply_audio = speak_text(reply_text, "en")
 
-            st.session_state.messages.append({"role": "assistant", "content": reply_text, "audio": reply_audio})
+            new_msg = {"role": "assistant", "content": reply_text, "audio": reply_audio}
+            _logged = st.session_state.pop("_last_logged_report", None)
+            if _logged:
+                new_msg["report_card"] = _logged
+            st.session_state.messages.append(new_msg)
             st.rerun()
         else:
             cleaned_input = user_turn.strip()
@@ -2263,30 +2506,39 @@ if active_tab == "chat":
                 allowed, limit_reason = check_and_record_usage()
                 if not allowed:
                     reply_text = usage_limit_message(limit_reason)
+                    retrieved_context = ""
                 else:
-                    with st.spinner("Thinking..."):
-                        try:
-                            # --- Pinecone retrieval: ground the reply in the
-                            # NAWASA knowledge base before sending to Gemini.
-                            retrieved_context = retrieve_nawasa_knowledge(cleaned_input) if cleaned_input else ""
-                            send_parts = list(message_parts) if message_parts else [cleaned_input]
-                            if retrieved_context:
-                                send_parts.insert(0, (
-                                    "[Reference material from the NAWASA knowledge base — use this "
-                                    "to answer accurately if it's relevant to the customer's question. "
-                                    "Don't quote it verbatim or mention you're using reference material.]\n"
-                                    f"{retrieved_context}"
-                                ))
-                            bot_response = st.session_state.chat.send_message(send_parts)
-                            reply_text = bot_response.text
-                        except Exception as e:
-                            reply_text = f"⚠️ Error: {e}"
+                    render_typing_indicator(ASSISTANT_AVATAR)
+                    st.session_state.pop("_last_logged_report", None)
+                    retrieved_context = ""
+                    try:
+                        # --- Pinecone retrieval: ground the reply in the
+                        # NAWASA knowledge base before sending to Gemini.
+                        retrieved_context = retrieve_nawasa_knowledge(cleaned_input) if cleaned_input else ""
+                        send_parts = list(message_parts) if message_parts else [cleaned_input]
+                        if retrieved_context:
+                            send_parts.insert(0, (
+                                "[Reference material from the NAWASA knowledge base — use this "
+                                "to answer accurately if it's relevant to the customer's question. "
+                                "Don't quote it verbatim or mention you're using reference material.]\n"
+                                f"{retrieved_context}"
+                            ))
+                        bot_response = st.session_state.chat.send_message(send_parts)
+                        reply_text = bot_response.text
+                    except Exception as e:
+                        reply_text = f"⚠️ Error: {e}"
 
                 reply_audio = None
                 if st.session_state.voice_replies:
                     reply_audio = speak_text(reply_text, "en")
 
-                st.session_state.messages.append({"role": "assistant", "content": reply_text, "audio": reply_audio})
+                new_msg = {"role": "assistant", "content": reply_text, "audio": reply_audio}
+                _logged = st.session_state.pop("_last_logged_report", None)
+                if _logged:
+                    new_msg["report_card"] = _logged
+                if retrieved_context:
+                    new_msg["used_knowledge_base"] = True
+                st.session_state.messages.append(new_msg)
                 st.rerun()
 
 # ===================== HISTORY =====================
@@ -2539,7 +2791,11 @@ elif active_tab == "report":
                     reference = save_report(r_name, r_phone, r_location, r_issue_type,
                                              r_description, attachment_name, severity=r_severity)
                     st.session_state.report_severity = "Unknown"
-                    st.success(f"✅ Report submitted! Your reference number is **{reference}** — save this to track your report below.")
+                    render_report_card({
+                        "reference": reference, "status": "Received",
+                        "issue_type": r_issue_type, "severity": r_severity,
+                    })
+                    st.caption("Save this reference number to track your report below.")
     st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown(f'<div class="aqua-section-label">{t("track_report_label")}</div>', unsafe_allow_html=True)
