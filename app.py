@@ -2391,12 +2391,34 @@ if active_tab == "chat":
                 render_typing_indicator(ASSISTANT_AVATAR)
                 st.session_state.pop("_last_logged_report", None)
                 try:
+                    # Transcribe first with a plain (tool-free) call rather than
+                    # sending raw audio straight into the tool-enabled chat
+                    # session — sending audio directly into a chat that has
+                    # tools=[log_water_report] attached (automatic function
+                    # calling) is what was causing voice messages to never
+                    # get a reply. Routing the transcript through the normal
+                    # chat afterwards keeps report-logging working exactly
+                    # as it does for typed text.
                     audio_part = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
-                    bot_response = st.session_state.chat.send_message([
-                        audio_part,
-                        "Please respond to this voice message from a NAWASA customer.",
-                    ])
-                    reply_text = bot_response.text
+                    transcript_response = st.session_state.client.models.generate_content(
+                        model=MODEL_NAME,
+                        contents=[
+                            audio_part,
+                            "Transcribe this voice message from a NAWASA customer "
+                            "into plain English text. Reply with ONLY the "
+                            "transcription, nothing else.",
+                        ],
+                    )
+                    transcript = (transcript_response.text or "").strip()
+
+                    if not transcript:
+                        reply_text = (
+                            "I couldn't quite make out that voice message — could "
+                            "you try recording again, or type your question instead?"
+                        )
+                    else:
+                        bot_response = st.session_state.chat.send_message(transcript)
+                        reply_text = bot_response.text
                 except Exception as e:
                     reply_text = f"⚠️ Error processing voice message: {e}"
 
