@@ -76,17 +76,15 @@ maximum legibility). Content surfaces (cards, chat bubbles, the hero) use
 selective glassmorphism — translucent, blurred, softly bordered — so they
 read as floating above the water rather than sitting on top of a photo.
 
-STORAGE: reports and notification signups are persisted to a Google Sheet
-when GOOGLE_SHEETS_ID + GOOGLE_SHEETS_CREDENTIALS are configured (see
-sheets_storage.py) — this survives redeploys/restarts on Streamlit Cloud,
-unlike local CSV files which live on ephemeral disk. If Sheets isn't
-configured, the app falls back to local CSVs automatically, exactly like
-the Pinecone retrieval fallback below.
+STORAGE: reports and notification signups are persisted to local CSV files
+under data/. This is fine for local development, but on Streamlit
+Community Cloud the filesystem is ephemeral, so data will not survive a
+redeploy or app restart there.
 
 STAFF ANALYTICS: the Staff Portal includes a read-only analytics section
 (reports by issue type / parish, average resolution time when available)
-— see staff_analytics.py. Purely additive, built from data already
-collected; does nothing if there are no reports yet.
+— see render_staff_analytics() below. Purely additive, built from data
+already collected; does nothing if there are no reports yet.
 
 The chat avatar (assets/aquaassist_avatar.png) carries the same accent
 color and a thin dashed "AI orbit" ring, which the CSS echoes as a soft
@@ -112,16 +110,6 @@ import streamlit as st
 from google import genai
 from google.genai import types
 
-from sheets_storage import (
-    HAS_SHEETS_BACKEND,
-    sheets_status_caption,
-    drive_status_caption,
-    sheets_save_report,
-    sheets_load_reports,
-    sheets_update_report_status,
-    sheets_save_notification_signup,
-    sheets_load_notifications,
-)
 # Optional upgrades — used automatically if installed, safely skipped if not.
 try:
     from audio_recorder_streamlit import audio_recorder
@@ -603,14 +591,7 @@ def search_faqs(query, faq_list=None):
 MODEL_NAME = "gemini-3.1-flash-lite"
 
 # ---------------------------------------------------------------------------
-# Report storage helpers
-#
-# STORAGE BACKEND: each function below tries the Google Sheets backend
-# first (sheets_storage.py) if it's configured, and falls back to local
-# CSV files automatically if it isn't, or if a Sheets call fails for any
-# reason. This means the app behaves identically either way — only the
-# persistence guarantee changes. See sheets_storage.py's docstring for
-# setup instructions.
+# Report storage helpers — local CSV files only.
 # ---------------------------------------------------------------------------
 def _migrate_reports_schema():
     import pandas as pd
@@ -649,12 +630,6 @@ def new_reference():
     return "NW-" + uuid.uuid4().hex[:7].upper()
 
 def save_report(name, phone, location, issue_type, description, attachment_name="", severity="Unknown"):
-    # Try the Sheets backend first — falls through to local CSV below on
-    # None (not configured, or the write failed for any reason).
-    if HAS_SHEETS_BACKEND:
-        reference = sheets_save_report(name, phone, location, issue_type, description, attachment_name, severity)
-        if reference:
-            return reference
     ensure_files()
     reference = new_reference()
     with open(REPORTS_PATH, "a", newline="", encoding="utf-8") as f:
@@ -669,10 +644,6 @@ def save_report(name, phone, location, issue_type, description, attachment_name=
     return reference
 
 def load_reports():
-    if HAS_SHEETS_BACKEND:
-        df = sheets_load_reports()
-        if df is not None:
-            return df
     ensure_files()
     import pandas as pd
     try:
@@ -687,9 +658,6 @@ def load_reports():
     return df
 
 def update_report_status(reference, new_status):
-    if HAS_SHEETS_BACKEND:
-        if sheets_update_report_status(reference, new_status):
-            return
     import pandas as pd
     df = load_reports()
     df.loc[df["reference"] == reference, "status"] = new_status
@@ -701,9 +669,6 @@ def track_report(reference):
     return match.iloc[0] if not match.empty else None
 
 def save_notification_signup(contact, categories):
-    if HAS_SHEETS_BACKEND:
-        if sheets_save_notification_signup(contact, categories):
-            return
     ensure_files()
     with open(NOTIFY_PATH, "a", newline="", encoding="utf-8") as f:
         csv.DictWriter(f, fieldnames=NOTIFY_FIELDS).writerow({
@@ -1723,10 +1688,7 @@ with st.sidebar:
         st.caption("📚 Knowledge base retrieval: installed, but PINECONE_API_KEY / PINECONE_INDEX_NAME not set")
     else:
         st.caption("📚 Knowledge base retrieval: not installed (add `pinecone` to requirements.txt to enable)")
-    # Sheets/Drive persistence diagnostics — same optional-dependency style
-    # as the captions above.
-    st.caption(sheets_status_caption())
-    st.caption(drive_status_caption())
+    st.caption("💾 Report/notification storage: local CSV files (data/) — not persisted across redeploys on Streamlit Cloud")
 
 # ===========================================================================
 # STAFF PORTAL
@@ -1784,7 +1746,7 @@ if mode == "🔐 Staff Portal":
                 st.metric(f"{STATUS_EMOJI.get(stage, '⚪')} {stage}", status_counts.get(stage, 0))
 
         # Read-only analytics section (reports by issue type / parish, and
-        # average resolution time when available) — see staff_analytics.py.
+        # average resolution time when available).
         render_staff_analytics(reports_df, GRENADA_PARISHES)
 
         st.markdown(f'<div class="aqua-section-label">{t("staff_map_label")}</div>', unsafe_allow_html=True)
